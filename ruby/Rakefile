@@ -1,0 +1,9 @@
+# frozen_string_literal: true
+
+require "minitest/test_task"
+
+Minitest::TestTask.create(:test) do |test|
+  test.test_globs = ["test/**/*_test.rb"]
+end
+
+task default: :test
