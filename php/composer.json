@@ -1,0 +1,35 @@
+{
+    "name": "santati/santati-php",
+    "description": "Official PHP SDK for the Santati audit-log API",
+    "type": "library",
+    "license": "Apache-2.0",
+    "keywords": ["santati", "audit", "audit-log", "logging"],
+    "require": {
+        "php": ">=8.2",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "guzzlehttp/guzzle": "^7.9",
+        "guzzlehttp/psr7": "^2.7"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.20",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Santati\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Santati\\Tests\\": "tests/"
+        }
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
+        "sort-packages": true
+    }
+}
