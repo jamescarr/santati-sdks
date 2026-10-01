@@ -44,7 +44,9 @@ case-insensitively (field `headers`).
 
 Local validation before any request: an empty `event` → `ValidationError` with
 field `event`; the resolved trail (the event's, else the client's) empty or
-absent → field `trail`.
+absent → field `trail`. Nothing else is checked locally: values the server
+validates (an empty metadata value, a name past 255 characters) are forwarded
+unchanged, and the server's answer decides.
 
 The body is the envelope with exactly the supplied members (snake_case wire
 names), `trail` resolved, and `idempotency_key` = the caller's or a freshly
@@ -150,5 +152,18 @@ lowercase `8-4-4-4-12`.
 Each facade sits on the generated core from `generator/config.json`, used
 through one configuration/client object per facade client — never the
 generators' process-wide defaults — and validates locally before constructing
-any generated model. A generated request model that rejects a spec constraint
-(e.g. an over-long name) surfaces as a `ValidationError` with `status` null.
+any generated model.
+
+The generation profile strips `minLength`/`maxLength` from every string schema.
+They are documentation (ingest clips an over-long value or defaults an empty
+one instead of rejecting it), and a core that enforces them would reject input
+the server accepts, or fail to decode a response that exceeds one. So no core
+enforces a length bound and every SDK forwards what the server accepts. A
+generated model that still rejects a request (a missing required member, say)
+surfaces as a `ValidationError` with `status` null.
+
+The profile keeps the spec's `ApiKeyAuth` scheme, so the python, typescript, go,
+ruby and php cores apply `Authorization: Api-Key <api_key>` themselves from the
+key and the `Api-Key` prefix the facade configures. The elixir and rust
+facades, whose generated layer carries no auth, set the header on their own
+transport. Either way the vectors assert it on every request.

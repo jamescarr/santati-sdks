@@ -58,7 +58,9 @@ CI runs exactly these tasks; a task that is green locally is green there.
    affected package's `CHANGELOG.md`; `release:prepare` refuses a package with
    none.
 4. **Facades validate locally first** and construct generated models only
-   afterwards; a generated model's rejection of a spec constraint surfaces as a
+   afterwards; local validation is limited to what `docs/sdk-surface.md` lists
+   (the profile strips length bounds, so the server is the only validator of
+   values). A generated model's rejection of anything else surfaces as a
    `ValidationError` (`status` null), never as a generator exception.
 5. **Never publish from a private repo state**: Go, PHP (Packagist) and
    TypeScript (npm provenance) need this repository public. See
@@ -69,6 +71,11 @@ CI runs exactly these tasks; a task that is green locally is green there.
 Every facade owns one configuration/client object per client instance (never
 the generators' process-wide defaults) and re-exports the generated read
 models (`AuditEvent`, `EventActor`, `EventTarget`) from its public entry point.
+
+The profile keeps the spec's `ApiKeyAuth` scheme, so python, typescript, go, ruby
+and php hand the key and the `Api-Key` prefix to the core's own api-key support;
+elixir and rust set `Authorization` on their own transport (their generated
+layer has no auth).
 
 | Package | Generated layer used | Why (and what is deliberately unused) |
 | --- | --- | --- |

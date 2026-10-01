@@ -17,7 +17,7 @@
     {"id": "emit.envelope", "description": "Sends exactly the supplied envelope members — resolved trail, snake_case keys, absent or null members omitted, `created_at` verbatim, and the envelope's idempotency_key winning over the client's."},
     {"id": "emit.idempotency", "description": "Generates a lowercase UUIDv4 idempotency_key for an emit that does not supply one, and reuses it across retries of that emit."},
     {"id": "emit.result", "description": "201 answers EmitResult with `duplicate` false and the stored AuditEvent; 200 answers `duplicate` true; any other 2xx raises ApiError."},
-    {"id": "emit.validation", "description": "Rejects an empty `event` and an unresolved (empty or absent) trail with ValidationError before any request."},
+    {"id": "emit.validation", "description": "Rejects an empty `event` and an unresolved (empty or absent) trail with ValidationError before any request, and nothing else: values the server validates, such as empty metadata values or names past 255 characters, are forwarded unchanged."},
     {"id": "batch.request", "description": "Posts `{\"events\": [envelope…]}` with one generated idempotency key per item lacking one; an empty list or an item whose resolved trail is missing raises ValidationError naming the failing item."},
     {"id": "batch.result", "description": "202 or 207 answers BatchResult with accepted/rejected counts and per-item results; a rejected item carries the server's error code, message and field."},
     {"id": "list.query", "description": "Sends only the supplied filters, in spec order, with values encoded by the generated core; the client's default trail is not applied to reads."},

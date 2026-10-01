@@ -52,9 +52,9 @@ whose generated code is stale.
    - A changed operationId or path: `generator/config.json`'s `operations`
      list and the facade's `list` parameters change too.
    - A change the profile's rewrites should absorb (a `readOnly` key, a
-     `date-time` format, a `oneOf`): check `.mise/lib/generate.py`'s comments;
-     if the rewrite needs to change, change it there and regenerate, because
-     `check:drift` runs that script.
+     `date-time` format, a length bound, a `oneOf`): check
+     `.mise/lib/generate.py`'s comments; if the rewrite needs to change, change
+     it there and regenerate, because `check:drift` runs that script.
 
 4. **Run everything.**
 
