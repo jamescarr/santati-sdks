@@ -22,6 +22,9 @@ An existing tool can be retrofitted with
 
 Hosted tools (web search, file search, computer use) and handoffs never reach
 the tool hooks, so they produce no events.
+
+A nested ``agent.as_tool(...)`` is a separate run: give it the same hooks with
+``as_tool(..., hooks=hooks)`` or its tool calls are not audited.
 """
 
 from __future__ import annotations

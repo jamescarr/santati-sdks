@@ -84,9 +84,10 @@ async def adeliver(dispatch: Dispatch, event_name: str, build: Callable[[], Even
     event loop, so a synchronous client never blocks asyncio or trio.
     Cancellation is not caught.
     """
-    from anyio import to_thread
-
     try:
+        # Inside the guard: a missing anyio must drop the event, not raise into the framework.
+        from anyio import to_thread
+
         event = build()
         if event is not None:
             await to_thread.run_sync(_guarded_dispatch, dispatch, event, event_name)

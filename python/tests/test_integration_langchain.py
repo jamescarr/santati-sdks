@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
+import threading
 from typing import Any
 
 import pytest
@@ -165,3 +167,36 @@ def test_a_raising_dispatch_leaves_the_tool_call_alone() -> None:
     configured = SantatiCallbackHandler(dispatch=explode_dispatch, organization_id="org_acme", trail="agents")
 
     assert lookup_invoice.invoke(TOOL_CALL, config={"callbacks": [configured]}).content == "INV-1: $42.00"
+
+
+@tool
+async def lookup_invoice_async(invoice_id: str) -> str:
+    """Look up one invoice by its id, on the event loop."""
+    return "INV-1: $42.00"
+
+
+def test_an_async_tool_run_dispatches_off_the_event_loop() -> None:
+    """The handler is synchronous, so LangChain must offload it or a blocking emit stalls the loop.
+
+    Only an async tool puts the callbacks on the loop (LangChain already moves a sync tool's whole
+    call into a thread), so a sync tool here would pass even if the handler ran inline.
+    """
+    threads: list[str] = []
+    captured: list[dict[str, Any]] = []
+
+    def dispatch(event: dict[str, Any]) -> None:
+        threads.append(threading.current_thread().name)
+        captured.append(event)
+
+    configured = SantatiCallbackHandler(dispatch=dispatch, organization_id="org_acme", trail="agents")
+
+    async def run() -> str:
+        await lookup_invoice_async.ainvoke(TOOL_CALL, config={"callbacks": [configured]})
+        return threading.current_thread().name
+
+    loop_thread = asyncio.run(run())
+
+    assert [event["event"] for event in captured] == ["agent.tool_call.succeeded"]
+    assert captured[0]["targets"] == [{"type": "tool", "id": "lookup_invoice_async"}]
+    assert captured[0]["data"] == {"arguments": {"invoice_id": "inv_1"}}
+    assert threads[0] != loop_thread

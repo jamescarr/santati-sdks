@@ -6,6 +6,7 @@ real HTTP server for the default-dispatch path.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -145,3 +146,21 @@ def test_metadata_drops_empty_values_and_truncates() -> None:
         "framework": "langchain",
         "note": "x" * 500,
     }
+
+
+def test_adeliver_dispatches_off_the_event_loop() -> None:
+    """A synchronous client must never run on the loop, or one emit stalls every task."""
+    threads: list[str] = []
+
+    async def run() -> str:
+        await _core.adeliver(
+            lambda event: threads.append(threading.current_thread().name),
+            "user.logged_in",
+            lambda: _core.base_event("user.logged_in", organization_id="org_acme", trail=None),
+        )
+        return threading.current_thread().name
+
+    loop_thread = asyncio.run(run())
+
+    assert len(threads) == 1
+    assert threads[0] != loop_thread

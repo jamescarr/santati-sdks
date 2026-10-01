@@ -120,7 +120,8 @@ Per framework:
   a result nothing can observe, so a failing tool is recorded as succeeded
   unless the tool is given `failure_error_function=record_tool_failure` (or
   retrofitted with `set_function_tool_failure_error_function`). Hosted tools
-  and handoffs produce no events.
+  and handoffs produce no events, and a nested `agent.as_tool(...)` run is
+  audited only when it is given the hooks too (`as_tool(..., hooks=hooks)`).
 - **Pydantic AI** — `SantatiCapability` audits every tool execution. A call
   that never ran (deferred, awaiting approval, skipped) produces no event.
 - **Claude Agent SDK** — `santati_hooks(...)` returns the hook configuration for
