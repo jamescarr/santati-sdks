@@ -240,7 +240,7 @@ pkg_tools() {
     cargo) echo rust,node ;;
     hex) echo erlang,elixir,node ;;
     gem) echo ruby,node ;;
-    composer) echo php,node ;;
+    composer) echo php,composer,node ;;
   esac
 }
 
