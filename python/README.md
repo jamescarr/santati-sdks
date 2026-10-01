@@ -89,12 +89,13 @@ handler = SantatiCallbackHandler(dispatch=record_event.delay, organization_id="o
 agent.invoke({"messages": [...]}, config={"callbacks": [handler]})
 ```
 
-`organization_id` and `actor` are fixed per integration instance, so a
+The four agent adapters fix `organization_id` and `actor` per instance, so a
 multi-tenant app builds one per request — or passes it per run, which all four
-agent frameworks support. The default agent actor is
+agent frameworks support. Their default actor is
 `{"type": "system", "id": <agent name or framework slug>}`; the agent name is
-also kept in `metadata.agent`. Event names are overridable per instance, which
-teams with a declared action catalog need.
+also kept in `metadata.agent`. Every integration lets you override its event
+names, which teams with a declared action catalog need. Django is different:
+see its entry below.
 
 Nothing an integration does can raise into the framework that called it: a
 failed emit is logged to the `santati.integrations` logger at WARNING and
@@ -104,12 +105,20 @@ retry replays instead of double-recording.
 Per framework:
 
 - **Django** — `instrument_auth` connects to `user_logged_in`,
-  `user_logged_out` and `user_login_failed`; call it from `AppConfig.ready`.
-  A failed login records the attempted identifier only
-  (`metadata.username`) and never any other credential value. Pass `actor` to
-  record the real end user, `context` to replace the default IP/user-agent
-  context, and set an `*_event` name to `None` to leave that signal alone. A
-  repeated call replaces the previous instrumentation.
+  `user_logged_out` and `user_login_failed`. Call it once, from
+  `AppConfig.ready`, and never per request: it installs one process-wide set
+  of receivers and a repeated call replaces the previous instrumentation, so
+  concurrent requests would overwrite each other's settings and could record
+  one tenant's logins under another's `organization_id`. A multi-tenant app
+  passes `organization_id` as a callable `(request, user)` that returns the
+  tenant's organization, or `None`/`""` to skip the event; `user` is `None`
+  for a failed login, and `request` is `None` when `authenticate()` ran
+  without one. `actor` is likewise a callable `(request, user)` returning the
+  actor to record instead of the Django user, for logins and logouts (a
+  failed login is always `anonymous`). A failed login records the attempted
+  identifier only (`metadata.username`) and never any other credential value.
+  Pass `context` to replace the default IP/user-agent context, and set an
+  `*_event` name to `None` to leave that signal alone.
 - **LangChain / LangGraph** — `SantatiCallbackHandler` audits `ToolNode`,
   `create_agent` and bare `tool.invoke` calls. It runs in an executor thread
   during async runs, so emits never stall the event loop. A call LangGraph
