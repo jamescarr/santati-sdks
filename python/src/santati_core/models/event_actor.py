@@ -17,9 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -28,10 +27,10 @@ class EventActor(BaseModel):
     """
     Who acted, in the producer's own ids.  Documentation-only on the write path — `apps.audit_trails.ingest` is the validator — and the shape `AuditEventSerializer.get_actor` always returns, so every key is present on a read even when the producer sent none of them.
     """ # noqa: E501
-    type: Annotated[str, Field(strict=True, max_length=64)] = Field(description="Actor kind: user, system or anonymous. The relay path stores whatever Ankusa relayed.")
-    id: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(default=None, description="The actor's id in the producer's own namespace; required unless `type` is anonymous.")
-    name: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(default=None, description="Human-readable actor name; empty when unknown.")
-    metadata: Optional[Dict[str, Annotated[str, Field(strict=True, max_length=500)]]] = Field(default=None, description="Actor metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most 500 characters.")
+    type: StrictStr = Field(description="Actor kind: user, system or anonymous. The relay path stores whatever Ankusa relayed.")
+    id: Optional[StrictStr] = Field(default=None, description="The actor's id in the producer's own namespace; required unless `type` is anonymous.")
+    name: Optional[StrictStr] = Field(default=None, description="Human-readable actor name; empty when unknown.")
+    metadata: Optional[Dict[str, StrictStr]] = Field(default=None, description="Actor metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most 500 characters.")
     __properties: ClassVar[List[str]] = ["type", "id", "name", "metadata"]
 
     model_config = ConfigDict(

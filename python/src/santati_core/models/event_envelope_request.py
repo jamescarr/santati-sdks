@@ -19,7 +19,6 @@ import json
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from santati_core.models.event_actor_request import EventActorRequest
 from santati_core.models.event_target_request import EventTargetRequest
 from typing import Optional, Set
@@ -30,14 +29,14 @@ class EventEnvelopeRequest(BaseModel):
     """
     Documentation-only shape of one producer envelope.  Never used to validate: `apps.audit_trails.envelope.parse_envelope` is the single validator, because it also has to serve the relay path's lenient mode. This class exists so the OpenAPI schema and the generated client show producers what to send, in the envelope's field order.  The published limits are enforced by ingest, not here: the three metadata maps (the event's, the actor's and each target's) hold at most 50 keys, keys are at most 40 characters of `A-Z a-z 0-9 _ . -`, values are at most 500 characters, and an event names at most 10 targets.
     """ # noqa: E501
-    event: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="The event type, e.g. invoice.voided.")
-    trail: Annotated[str, Field(min_length=1, strict=True, max_length=64)] = Field(description="The audit log trail to index this event on; the key must be scoped to it.")
+    event: StrictStr = Field(description="The event type, e.g. invoice.voided.")
+    trail: StrictStr = Field(description="The audit log trail to index this event on; the key must be scoped to it.")
     created_at: Optional[StrictStr] = Field(default=None, description="RFC 3339 with an offset: when the event happened. Defaults to receipt time; a timestamp without an offset is refused.")
-    organization_id: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="The end-customer organization this event belongs to.")
-    idempotency_key: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Replay guard, per trail: a repeat of the same key within 24 hours returns the event already stored instead of indexing a new one.")
+    organization_id: Optional[StrictStr] = Field(default=None, description="The end-customer organization this event belongs to.")
+    idempotency_key: Optional[StrictStr] = Field(default=None, description="Replay guard, per trail: a repeat of the same key within 24 hours returns the event already stored instead of indexing a new one.")
     actor: Optional[EventActorRequest] = Field(default=None, description="Who acted; omit it for an event with no actor.")
     targets: Optional[List[EventTargetRequest]] = Field(default=None, description="The objects the event acted on; at most 10.")
-    metadata: Optional[Dict[str, Annotated[str, Field(min_length=1, strict=True, max_length=500)]]] = Field(default=None, description="Event metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most 500 characters.")
+    metadata: Optional[Dict[str, StrictStr]] = Field(default=None, description="Event metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most 500 characters.")
     data: Optional[Any] = Field(default=None, description="The producer's own payload for the event, stored verbatim and never interpreted.")
     context: Optional[Dict[str, Any]] = Field(default=None, description="Extra producer context, stored verbatim; `context.actor` and `context.targets` are read as a fallback when the top-level members are absent.")
     __properties: ClassVar[List[str]] = ["event", "trail", "created_at", "organization_id", "idempotency_key", "actor", "targets", "metadata", "data", "context"]

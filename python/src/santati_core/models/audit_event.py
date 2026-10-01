@@ -19,7 +19,6 @@ import json
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from santati_core.models.event_actor import EventActor
 from santati_core.models.event_target import EventTarget
 from typing import Optional, Set
@@ -31,11 +30,11 @@ class AuditEvent(BaseModel):
     AuditEvent
     """ # noqa: E501
     id: StrictStr = Field(description="The producer's event id, or a generated ULID when none was sent.")
-    trail: Annotated[str, Field(strict=True, max_length=64)] = Field(description="The audit log trail the event was indexed on.")
+    trail: StrictStr = Field(description="The audit log trail the event was indexed on.")
     event: StrictStr = Field(description="The event type, e.g. invoice.voided.")
     created_at: StrictStr = Field(description="RFC 3339, when the producer says the event happened.")
     received_at: StrictStr = Field(description="RFC 3339, when Santati indexed the event.")
-    organization_id: Optional[Annotated[str, Field(strict=True, max_length=255)]] = Field(default=None, description="The end-customer organization the producer attributed the event to; empty when none.")
+    organization_id: Optional[StrictStr] = Field(default=None, description="The end-customer organization the producer attributed the event to; empty when none.")
     actor: EventActor = Field(description="Who acted: the actor columns first, the producer's payload behind them.")
     targets: List[EventTarget] = Field(description="The objects this event acted on, in the producer's order.")
     metadata: Dict[str, StrictStr] = Field(description="The event's own key/value map; keys and values are strings on the wire.")

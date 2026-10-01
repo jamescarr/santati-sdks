@@ -57,22 +57,6 @@ BATCH_ITEM_RESULT = {
 # generator referenced a non-existent `SantatiCore.Model.Uri` for `format: uri`.
 DROPPED_FORMATS = {"date-time", "date", "uri"}
 
-# Build output inside a generated tree (a test run's `__pycache__`, a build's
-# `target/`) is not drift: only the files generation itself produces matter.
-IGNORED_PARTS = {
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".venv",
-    "node_modules",
-    "dist",
-    "target",
-    "_build",
-    "deps",
-    "vendor",
-}
-
 
 class Failure(SystemExit):
     def __init__(self, message: str) -> None:
@@ -163,8 +147,13 @@ def refs_in(node) -> list[str]:
 
 def prune_schemas(spec: dict) -> None:
     """Schemas the kept paths cannot reach are dead weight — and TypeScript's
-    generator emits an uncompilable `FieldErrors` map for one of them."""
-    components = spec.get("components", {})
+    generator emits an uncompilable `FieldErrors` map for one of them.
+
+    Only `components.schemas` is pruned. `securitySchemes` is never `$ref`'d: each
+    operation names its scheme in `security:`, so a prune over every section
+    drops the scheme and leaves the operations requiring one that no longer
+    exists — and the cores with no api-key support at all."""
+    schemas = spec["components"]["schemas"]
     reachable: set[str] = set()
     pending = refs_in(spec.get("paths", {}))
     while pending:
@@ -173,16 +162,9 @@ def prune_schemas(spec: dict) -> None:
             continue
         reachable.add(pointer)
         pending.extend(refs_in(resolve(spec, pointer)))
-    for section, entries in list(components.items()):
-        kept = {
-            name: value
-            for name, value in entries.items()
-            if f"#/components/{section}/{name}" in reachable
-        }
-        if kept:
-            components[section] = kept
-        else:
-            del components[section]
+    spec["components"]["schemas"] = {
+        name: value for name, value in schemas.items() if f"#/components/schemas/{name}" in reachable
+    }
 
 
 def resolve(spec: dict, pointer: str):
@@ -201,6 +183,24 @@ def strip_string_formats(node) -> None:
     elif isinstance(node, list):
         for item in node:
             strip_string_formats(item)
+
+
+def strip_length_bounds(node) -> None:
+    """`minLength`/`maxLength` are documentation: the control plane's serializers
+    say so, and ingest clips an over-long value or defaults an empty one instead
+    of rejecting it. Cores that enforce the bounds (Python, Ruby, PHP) would
+    reject input the server accepts — and fail to decode a response that
+    exceeds one — while the others would not, so the server stays the only
+    validator."""
+    if isinstance(node, dict):
+        if node.get("type") == "string":
+            node.pop("minLength", None)
+            node.pop("maxLength", None)
+        for value in node.values():
+            strip_length_bounds(value)
+    elif isinstance(node, list):
+        for item in node:
+            strip_length_bounds(item)
 
 
 def strip_read_write_only(node) -> None:
@@ -224,6 +224,7 @@ def prepare() -> dict:
     flatten_batch_item_result(spec)
     prune_schemas(spec)
     strip_string_formats(spec)
+    strip_length_bounds(spec)
     strip_read_write_only(spec)
     return spec
 
@@ -294,33 +295,45 @@ def copy_outputs(core: str, generated: Path, out_root: Path) -> None:
             shutil.copyfile(source, target)
 
 
-def is_ignored(relative: Path) -> bool:
-    return any(part in IGNORED_PARTS for part in relative.parts)
-
-
-def relative_files(root: Path) -> dict[Path, Path]:
-    if root.is_file():
-        return {Path(root.name): root}
-    if not root.exists():
-        return {}
+def repo_files(path: Path) -> dict[Path, Path]:
+    """The repo's side of a comparison: the files under `path` that git does not
+    ignore. Build output such as a test run's `__pycache__` is in .gitignore and
+    never counts as drift, while a stray untracked file in a generated tree
+    still does."""
+    result = subprocess.run(
+        ["git", "ls-files", "-co", "--exclude-standard", "-z", "--", str(path.relative_to(ROOT))],
+        cwd=ROOT,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        die(f"git ls-files failed: {result.stderr.decode().strip()}")
+    files = (ROOT / name for name in result.stdout.decode().split("\0") if name)
     return {
-        path.relative_to(root): path
-        for path in sorted(root.rglob("*"))
-        if path.is_file() and not is_ignored(path.relative_to(root))
+        (Path(path.name) if path.is_file() else file.relative_to(path)): file for file in files if file.exists()
     }
 
 
-def diff_paths(left: Path, right: Path) -> str:
+def generated_files(path: Path) -> dict[Path, Path]:
+    """The fresh tree's side: everything in it was just generated."""
+    if path.is_file():
+        return {Path(path.name): path}
+    if not path.exists():
+        return {}
+    return {file.relative_to(path): file for file in sorted(path.rglob("*")) if file.is_file()}
+
+
+def diff_paths(repo: Path, generated: Path) -> str:
     report = []
-    left_files = relative_files(left)
-    right_files = relative_files(right)
-    for name in sorted(set(left_files) | set(right_files)):
-        if name in left_files and name not in right_files:
-            report.append(f"only in repo: {left_files[name]}\n")
-        elif name in right_files and name not in left_files:
-            report.append(f"only in generated: {right_files[name]}\n")
+    repo_side = repo_files(repo)
+    generated_side = generated_files(generated)
+    for name in sorted(set(repo_side) | set(generated_side)):
+        if name not in generated_side:
+            report.append(f"only in repo: {repo_side[name]}\n")
+        elif name not in repo_side:
+            report.append(f"only in generated: {generated_side[name]}\n")
         else:
-            report.extend(diff_files(left_files[name], right_files[name]))
+            report.extend(diff_files(repo_side[name], generated_side[name]))
     return "".join(report)
 
 

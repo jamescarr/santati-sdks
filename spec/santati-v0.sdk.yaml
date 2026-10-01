@@ -157,7 +157,6 @@ paths:
         name: Idempotency-Key
         schema:
           type: string
-          maxLength: 255
         description: 'Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours
           returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a
           `400 invalid_envelope`. An event''s own `idempotency_key` beats this header for that event. Do not send it with
@@ -400,7 +399,6 @@ components:
         trail:
           type: string
           description: The audit log trail the event was indexed on.
-          maxLength: 64
         event:
           type: string
           description: The event type, e.g. invoice.voided.
@@ -413,7 +411,6 @@ components:
         organization_id:
           type: string
           description: The end-customer organization the producer attributed the event to; empty when none.
-          maxLength: 255
         actor:
           allOf:
           - $ref: '#/components/schemas/EventActor'
@@ -492,20 +489,16 @@ components:
         type:
           type: string
           description: 'Actor kind: user, system or anonymous. The relay path stores whatever Ankusa relayed.'
-          maxLength: 64
         id:
           type: string
           description: The actor's id in the producer's own namespace; required unless `type` is anonymous.
-          maxLength: 255
         name:
           type: string
           description: Human-readable actor name; empty when unknown.
-          maxLength: 255
         metadata:
           type: object
           additionalProperties:
             type: string
-            maxLength: 500
           description: 'Actor metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
             500 characters.'
       required:
@@ -523,25 +516,17 @@ components:
       properties:
         type:
           type: string
-          minLength: 1
           description: 'Actor kind: user, system or anonymous. The relay path stores whatever Ankusa relayed.'
-          maxLength: 64
         id:
           type: string
-          minLength: 1
           description: The actor's id in the producer's own namespace; required unless `type` is anonymous.
-          maxLength: 255
         name:
           type: string
-          minLength: 1
           description: Human-readable actor name; empty when unknown.
-          maxLength: 255
         metadata:
           type: object
           additionalProperties:
             type: string
-            minLength: 1
-            maxLength: 500
           description: 'Actor metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
             500 characters.'
       required:
@@ -633,29 +618,21 @@ components:
       properties:
         event:
           type: string
-          minLength: 1
           description: The event type, e.g. invoice.voided.
-          maxLength: 255
         trail:
           type: string
-          minLength: 1
           description: The audit log trail to index this event on; the key must be scoped to it.
-          maxLength: 64
         created_at:
           type: string
           description: 'RFC 3339 with an offset: when the event happened. Defaults to receipt time; a timestamp without an
             offset is refused.'
         organization_id:
           type: string
-          minLength: 1
           description: The end-customer organization this event belongs to.
-          maxLength: 255
         idempotency_key:
           type: string
-          minLength: 1
           description: 'Replay guard, per trail: a repeat of the same key within 24 hours returns the event already stored
             instead of indexing a new one.'
-          maxLength: 255
         actor:
           allOf:
           - $ref: '#/components/schemas/EventActorRequest'
@@ -669,8 +646,6 @@ components:
           type: object
           additionalProperties:
             type: string
-            minLength: 1
-            maxLength: 500
           description: 'Event metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
             500 characters.'
         data:
@@ -699,20 +674,16 @@ components:
         type:
           type: string
           description: Target kind, e.g. invoice; ingest requires a non-empty string.
-          maxLength: 64
         id:
           type: string
           description: The target's id in the producer's own namespace.
-          maxLength: 255
         name:
           type: string
           description: Human-readable target name; empty when unknown.
-          maxLength: 255
         metadata:
           type: object
           additionalProperties:
             type: string
-            maxLength: 500
           description: 'Target metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
             500 characters.'
       required:
@@ -729,25 +700,17 @@ components:
       properties:
         type:
           type: string
-          minLength: 1
           description: Target kind, e.g. invoice; ingest requires a non-empty string.
-          maxLength: 64
         id:
           type: string
-          minLength: 1
           description: The target's id in the producer's own namespace.
-          maxLength: 255
         name:
           type: string
-          minLength: 1
           description: Human-readable target name; empty when unknown.
-          maxLength: 255
         metadata:
           type: object
           additionalProperties:
             type: string
-            minLength: 1
-            maxLength: 500
           description: 'Target metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
             500 characters.'
       required:
@@ -772,6 +735,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AuditEvent'
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: '`Authorization: Api-Key <key>`. `/api/v0/` operations take a team API key; `/teams/` and `/a/{team_slug}/`
+        operations take a user API key.'
 servers:
 - url: https://api.santati.io
   description: Production

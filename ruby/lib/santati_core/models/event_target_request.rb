@@ -112,32 +112,8 @@ module SantatiCore
         invalid_properties.push('invalid value for "type", type cannot be nil.')
       end
 
-      if @type.to_s.length > 64
-        invalid_properties.push('invalid value for "type", the character length must be smaller than or equal to 64.')
-      end
-
-      if @type.to_s.length < 1
-        invalid_properties.push('invalid value for "type", the character length must be greater than or equal to 1.')
-      end
-
       if @id.nil?
         invalid_properties.push('invalid value for "id", id cannot be nil.')
-      end
-
-      if @id.to_s.length > 255
-        invalid_properties.push('invalid value for "id", the character length must be smaller than or equal to 255.')
-      end
-
-      if @id.to_s.length < 1
-        invalid_properties.push('invalid value for "id", the character length must be greater than or equal to 1.')
-      end
-
-      if !@name.nil? && @name.to_s.length > 255
-        invalid_properties.push('invalid value for "name", the character length must be smaller than or equal to 255.')
-      end
-
-      if !@name.nil? && @name.to_s.length < 1
-        invalid_properties.push('invalid value for "name", the character length must be greater than or equal to 1.')
       end
 
       invalid_properties
@@ -148,13 +124,7 @@ module SantatiCore
     def valid?
       warn '[DEPRECATED] the `valid?` method is obsolete'
       return false if @type.nil?
-      return false if @type.to_s.length > 64
-      return false if @type.to_s.length < 1
       return false if @id.nil?
-      return false if @id.to_s.length > 255
-      return false if @id.to_s.length < 1
-      return false if !@name.nil? && @name.to_s.length > 255
-      return false if !@name.nil? && @name.to_s.length < 1
       true
     end
 
@@ -163,14 +133,6 @@ module SantatiCore
     def type=(type)
       if type.nil?
         fail ArgumentError, 'type cannot be nil'
-      end
-
-      if type.to_s.length > 64
-        fail ArgumentError, 'invalid value for "type", the character length must be smaller than or equal to 64.'
-      end
-
-      if type.to_s.length < 1
-        fail ArgumentError, 'invalid value for "type", the character length must be greater than or equal to 1.'
       end
 
       @type = type
@@ -183,33 +145,7 @@ module SantatiCore
         fail ArgumentError, 'id cannot be nil'
       end
 
-      if id.to_s.length > 255
-        fail ArgumentError, 'invalid value for "id", the character length must be smaller than or equal to 255.'
-      end
-
-      if id.to_s.length < 1
-        fail ArgumentError, 'invalid value for "id", the character length must be greater than or equal to 1.'
-      end
-
       @id = id
-    end
-
-    # Custom attribute writer method with validation
-    # @param [Object] name Value to be assigned
-    def name=(name)
-      if name.nil?
-        fail ArgumentError, 'name cannot be nil'
-      end
-
-      if name.to_s.length > 255
-        fail ArgumentError, 'invalid value for "name", the character length must be smaller than or equal to 255.'
-      end
-
-      if name.to_s.length < 1
-        fail ArgumentError, 'invalid value for "name", the character length must be greater than or equal to 1.'
-      end
-
-      @name = name
     end
 
     # Checks equality by comparing each attribute.

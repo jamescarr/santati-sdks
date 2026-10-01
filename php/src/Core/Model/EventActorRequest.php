@@ -299,30 +299,6 @@ class EventActorRequest implements ModelInterface, ArrayAccess, \JsonSerializabl
         if ($this->container['type'] === null) {
             $invalidProperties[] = "'type' can't be null";
         }
-        if ((mb_strlen($this->container['type']) > 64)) {
-            $invalidProperties[] = "invalid value for 'type', the character length must be smaller than or equal to 64.";
-        }
-
-        if ((mb_strlen($this->container['type']) < 1)) {
-            $invalidProperties[] = "invalid value for 'type', the character length must be bigger than or equal to 1.";
-        }
-
-        if (!is_null($this->container['id']) && (mb_strlen($this->container['id']) > 255)) {
-            $invalidProperties[] = "invalid value for 'id', the character length must be smaller than or equal to 255.";
-        }
-
-        if (!is_null($this->container['id']) && (mb_strlen($this->container['id']) < 1)) {
-            $invalidProperties[] = "invalid value for 'id', the character length must be bigger than or equal to 1.";
-        }
-
-        if (!is_null($this->container['name']) && (mb_strlen($this->container['name']) > 255)) {
-            $invalidProperties[] = "invalid value for 'name', the character length must be smaller than or equal to 255.";
-        }
-
-        if (!is_null($this->container['name']) && (mb_strlen($this->container['name']) < 1)) {
-            $invalidProperties[] = "invalid value for 'name', the character length must be bigger than or equal to 1.";
-        }
-
         return $invalidProperties;
     }
 
@@ -360,13 +336,6 @@ class EventActorRequest implements ModelInterface, ArrayAccess, \JsonSerializabl
         if (is_null($type)) {
             throw new \InvalidArgumentException('non-nullable type cannot be null');
         }
-        if ((mb_strlen($type) > 64)) {
-            throw new \InvalidArgumentException('invalid length for $type when calling EventActorRequest., must be smaller than or equal to 64.');
-        }
-        if ((mb_strlen($type) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $type when calling EventActorRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['type'] = $type;
 
         return $this;
@@ -394,13 +363,6 @@ class EventActorRequest implements ModelInterface, ArrayAccess, \JsonSerializabl
         if (is_null($id)) {
             throw new \InvalidArgumentException('non-nullable id cannot be null');
         }
-        if ((mb_strlen($id) > 255)) {
-            throw new \InvalidArgumentException('invalid length for $id when calling EventActorRequest., must be smaller than or equal to 255.');
-        }
-        if ((mb_strlen($id) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $id when calling EventActorRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['id'] = $id;
 
         return $this;
@@ -428,13 +390,6 @@ class EventActorRequest implements ModelInterface, ArrayAccess, \JsonSerializabl
         if (is_null($name)) {
             throw new \InvalidArgumentException('non-nullable name cannot be null');
         }
-        if ((mb_strlen($name) > 255)) {
-            throw new \InvalidArgumentException('invalid length for $name when calling EventActorRequest., must be smaller than or equal to 255.');
-        }
-        if ((mb_strlen($name) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $name when calling EventActorRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['name'] = $name;
 
         return $this;

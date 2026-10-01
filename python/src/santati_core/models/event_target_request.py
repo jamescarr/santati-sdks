@@ -17,9 +17,8 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from typing_extensions import Annotated
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
@@ -28,10 +27,10 @@ class EventTargetRequest(BaseModel):
     """
     One object an event acted on, in the producer's own ids.  The shape `AuditEventSerializer.get_targets` returns, and the shape ingest accepts on an envelope's `targets` array.
     """ # noqa: E501
-    type: Annotated[str, Field(min_length=1, strict=True, max_length=64)] = Field(description="Target kind, e.g. invoice; ingest requires a non-empty string.")
-    id: Annotated[str, Field(min_length=1, strict=True, max_length=255)] = Field(description="The target's id in the producer's own namespace.")
-    name: Optional[Annotated[str, Field(min_length=1, strict=True, max_length=255)]] = Field(default=None, description="Human-readable target name; empty when unknown.")
-    metadata: Optional[Dict[str, Annotated[str, Field(min_length=1, strict=True, max_length=500)]]] = Field(default=None, description="Target metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most 500 characters.")
+    type: StrictStr = Field(description="Target kind, e.g. invoice; ingest requires a non-empty string.")
+    id: StrictStr = Field(description="The target's id in the producer's own namespace.")
+    name: Optional[StrictStr] = Field(default=None, description="Human-readable target name; empty when unknown.")
+    metadata: Optional[Dict[str, StrictStr]] = Field(default=None, description="Target metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most 500 characters.")
     __properties: ClassVar[List[str]] = ["type", "id", "name", "metadata"]
 
     model_config = ConfigDict(

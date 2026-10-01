@@ -44,7 +44,7 @@ class AuditEventsApi:
     def events_create(
         self,
         event_ingest_request: EventIngestRequest,
-        idempotency_key: Annotated[Optional[Annotated[str, Field(strict=True, max_length=255)]], Field(description="Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a `400 invalid_envelope`. An event's own `idempotency_key` beats this header for that event. Do not send it with a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team and trail, so each later such event on the same trail is reported `duplicate` with the first event's id and is not written.")] = None,
+        idempotency_key: Annotated[Optional[StrictStr], Field(description="Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a `400 invalid_envelope`. An event's own `idempotency_key` beats this header for that event. Do not send it with a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team and trail, so each later such event on the same trail is reported `duplicate` with the first event's id and is not written.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -122,7 +122,7 @@ class AuditEventsApi:
     def events_create_with_http_info(
         self,
         event_ingest_request: EventIngestRequest,
-        idempotency_key: Annotated[Optional[Annotated[str, Field(strict=True, max_length=255)]], Field(description="Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a `400 invalid_envelope`. An event's own `idempotency_key` beats this header for that event. Do not send it with a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team and trail, so each later such event on the same trail is reported `duplicate` with the first event's id and is not written.")] = None,
+        idempotency_key: Annotated[Optional[StrictStr], Field(description="Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a `400 invalid_envelope`. An event's own `idempotency_key` beats this header for that event. Do not send it with a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team and trail, so each later such event on the same trail is reported `duplicate` with the first event's id and is not written.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -200,7 +200,7 @@ class AuditEventsApi:
     def events_create_without_preload_content(
         self,
         event_ingest_request: EventIngestRequest,
-        idempotency_key: Annotated[Optional[Annotated[str, Field(strict=True, max_length=255)]], Field(description="Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a `400 invalid_envelope`. An event's own `idempotency_key` beats this header for that event. Do not send it with a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team and trail, so each later such event on the same trail is reported `duplicate` with the first event's id and is not written.")] = None,
+        idempotency_key: Annotated[Optional[StrictStr], Field(description="Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a `400 invalid_envelope`. An event's own `idempotency_key` beats this header for that event. Do not send it with a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team and trail, so each later such event on the same trail is reported `duplicate` with the first event's id and is not written.")] = None,
         _request_timeout: Union[
             None,
             Annotated[StrictFloat, Field(gt=0)],
@@ -329,6 +329,7 @@ class AuditEventsApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'ApiKeyAuth'
         ]
 
         return self.api_client.param_serialize(
@@ -821,6 +822,7 @@ class AuditEventsApi:
 
         # authentication setting
         _auth_settings: List[str] = [
+            'ApiKeyAuth'
         ]
 
         return self.api_client.param_serialize(

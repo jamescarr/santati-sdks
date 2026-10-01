@@ -341,41 +341,9 @@ class EventEnvelopeRequest implements ModelInterface, ArrayAccess, \JsonSerializ
         if ($this->container['event'] === null) {
             $invalidProperties[] = "'event' can't be null";
         }
-        if ((mb_strlen($this->container['event']) > 255)) {
-            $invalidProperties[] = "invalid value for 'event', the character length must be smaller than or equal to 255.";
-        }
-
-        if ((mb_strlen($this->container['event']) < 1)) {
-            $invalidProperties[] = "invalid value for 'event', the character length must be bigger than or equal to 1.";
-        }
-
         if ($this->container['trail'] === null) {
             $invalidProperties[] = "'trail' can't be null";
         }
-        if ((mb_strlen($this->container['trail']) > 64)) {
-            $invalidProperties[] = "invalid value for 'trail', the character length must be smaller than or equal to 64.";
-        }
-
-        if ((mb_strlen($this->container['trail']) < 1)) {
-            $invalidProperties[] = "invalid value for 'trail', the character length must be bigger than or equal to 1.";
-        }
-
-        if (!is_null($this->container['organization_id']) && (mb_strlen($this->container['organization_id']) > 255)) {
-            $invalidProperties[] = "invalid value for 'organization_id', the character length must be smaller than or equal to 255.";
-        }
-
-        if (!is_null($this->container['organization_id']) && (mb_strlen($this->container['organization_id']) < 1)) {
-            $invalidProperties[] = "invalid value for 'organization_id', the character length must be bigger than or equal to 1.";
-        }
-
-        if (!is_null($this->container['idempotency_key']) && (mb_strlen($this->container['idempotency_key']) > 255)) {
-            $invalidProperties[] = "invalid value for 'idempotency_key', the character length must be smaller than or equal to 255.";
-        }
-
-        if (!is_null($this->container['idempotency_key']) && (mb_strlen($this->container['idempotency_key']) < 1)) {
-            $invalidProperties[] = "invalid value for 'idempotency_key', the character length must be bigger than or equal to 1.";
-        }
-
         return $invalidProperties;
     }
 
@@ -413,13 +381,6 @@ class EventEnvelopeRequest implements ModelInterface, ArrayAccess, \JsonSerializ
         if (is_null($event)) {
             throw new \InvalidArgumentException('non-nullable event cannot be null');
         }
-        if ((mb_strlen($event) > 255)) {
-            throw new \InvalidArgumentException('invalid length for $event when calling EventEnvelopeRequest., must be smaller than or equal to 255.');
-        }
-        if ((mb_strlen($event) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $event when calling EventEnvelopeRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['event'] = $event;
 
         return $this;
@@ -447,13 +408,6 @@ class EventEnvelopeRequest implements ModelInterface, ArrayAccess, \JsonSerializ
         if (is_null($trail)) {
             throw new \InvalidArgumentException('non-nullable trail cannot be null');
         }
-        if ((mb_strlen($trail) > 64)) {
-            throw new \InvalidArgumentException('invalid length for $trail when calling EventEnvelopeRequest., must be smaller than or equal to 64.');
-        }
-        if ((mb_strlen($trail) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $trail when calling EventEnvelopeRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['trail'] = $trail;
 
         return $this;
@@ -508,13 +462,6 @@ class EventEnvelopeRequest implements ModelInterface, ArrayAccess, \JsonSerializ
         if (is_null($organization_id)) {
             throw new \InvalidArgumentException('non-nullable organization_id cannot be null');
         }
-        if ((mb_strlen($organization_id) > 255)) {
-            throw new \InvalidArgumentException('invalid length for $organization_id when calling EventEnvelopeRequest., must be smaller than or equal to 255.');
-        }
-        if ((mb_strlen($organization_id) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $organization_id when calling EventEnvelopeRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['organization_id'] = $organization_id;
 
         return $this;
@@ -542,13 +489,6 @@ class EventEnvelopeRequest implements ModelInterface, ArrayAccess, \JsonSerializ
         if (is_null($idempotency_key)) {
             throw new \InvalidArgumentException('non-nullable idempotency_key cannot be null');
         }
-        if ((mb_strlen($idempotency_key) > 255)) {
-            throw new \InvalidArgumentException('invalid length for $idempotency_key when calling EventEnvelopeRequest., must be smaller than or equal to 255.');
-        }
-        if ((mb_strlen($idempotency_key) < 1)) {
-            throw new \InvalidArgumentException('invalid length for $idempotency_key when calling EventEnvelopeRequest., must be bigger than or equal to 1.');
-        }
-
         $this->container['idempotency_key'] = $idempotency_key;
 
         return $this;

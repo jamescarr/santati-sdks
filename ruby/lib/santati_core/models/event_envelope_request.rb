@@ -171,40 +171,8 @@ module SantatiCore
         invalid_properties.push('invalid value for "event", event cannot be nil.')
       end
 
-      if @event.to_s.length > 255
-        invalid_properties.push('invalid value for "event", the character length must be smaller than or equal to 255.')
-      end
-
-      if @event.to_s.length < 1
-        invalid_properties.push('invalid value for "event", the character length must be greater than or equal to 1.')
-      end
-
       if @trail.nil?
         invalid_properties.push('invalid value for "trail", trail cannot be nil.')
-      end
-
-      if @trail.to_s.length > 64
-        invalid_properties.push('invalid value for "trail", the character length must be smaller than or equal to 64.')
-      end
-
-      if @trail.to_s.length < 1
-        invalid_properties.push('invalid value for "trail", the character length must be greater than or equal to 1.')
-      end
-
-      if !@organization_id.nil? && @organization_id.to_s.length > 255
-        invalid_properties.push('invalid value for "organization_id", the character length must be smaller than or equal to 255.')
-      end
-
-      if !@organization_id.nil? && @organization_id.to_s.length < 1
-        invalid_properties.push('invalid value for "organization_id", the character length must be greater than or equal to 1.')
-      end
-
-      if !@idempotency_key.nil? && @idempotency_key.to_s.length > 255
-        invalid_properties.push('invalid value for "idempotency_key", the character length must be smaller than or equal to 255.')
-      end
-
-      if !@idempotency_key.nil? && @idempotency_key.to_s.length < 1
-        invalid_properties.push('invalid value for "idempotency_key", the character length must be greater than or equal to 1.')
       end
 
       invalid_properties
@@ -215,15 +183,7 @@ module SantatiCore
     def valid?
       warn '[DEPRECATED] the `valid?` method is obsolete'
       return false if @event.nil?
-      return false if @event.to_s.length > 255
-      return false if @event.to_s.length < 1
       return false if @trail.nil?
-      return false if @trail.to_s.length > 64
-      return false if @trail.to_s.length < 1
-      return false if !@organization_id.nil? && @organization_id.to_s.length > 255
-      return false if !@organization_id.nil? && @organization_id.to_s.length < 1
-      return false if !@idempotency_key.nil? && @idempotency_key.to_s.length > 255
-      return false if !@idempotency_key.nil? && @idempotency_key.to_s.length < 1
       true
     end
 
@@ -232,14 +192,6 @@ module SantatiCore
     def event=(event)
       if event.nil?
         fail ArgumentError, 'event cannot be nil'
-      end
-
-      if event.to_s.length > 255
-        fail ArgumentError, 'invalid value for "event", the character length must be smaller than or equal to 255.'
-      end
-
-      if event.to_s.length < 1
-        fail ArgumentError, 'invalid value for "event", the character length must be greater than or equal to 1.'
       end
 
       @event = event
@@ -252,51 +204,7 @@ module SantatiCore
         fail ArgumentError, 'trail cannot be nil'
       end
 
-      if trail.to_s.length > 64
-        fail ArgumentError, 'invalid value for "trail", the character length must be smaller than or equal to 64.'
-      end
-
-      if trail.to_s.length < 1
-        fail ArgumentError, 'invalid value for "trail", the character length must be greater than or equal to 1.'
-      end
-
       @trail = trail
-    end
-
-    # Custom attribute writer method with validation
-    # @param [Object] organization_id Value to be assigned
-    def organization_id=(organization_id)
-      if organization_id.nil?
-        fail ArgumentError, 'organization_id cannot be nil'
-      end
-
-      if organization_id.to_s.length > 255
-        fail ArgumentError, 'invalid value for "organization_id", the character length must be smaller than or equal to 255.'
-      end
-
-      if organization_id.to_s.length < 1
-        fail ArgumentError, 'invalid value for "organization_id", the character length must be greater than or equal to 1.'
-      end
-
-      @organization_id = organization_id
-    end
-
-    # Custom attribute writer method with validation
-    # @param [Object] idempotency_key Value to be assigned
-    def idempotency_key=(idempotency_key)
-      if idempotency_key.nil?
-        fail ArgumentError, 'idempotency_key cannot be nil'
-      end
-
-      if idempotency_key.to_s.length > 255
-        fail ArgumentError, 'invalid value for "idempotency_key", the character length must be smaller than or equal to 255.'
-      end
-
-      if idempotency_key.to_s.length < 1
-        fail ArgumentError, 'invalid value for "idempotency_key", the character length must be greater than or equal to 1.'
-      end
-
-      @idempotency_key = idempotency_key
     end
 
     # Checks equality by comparing each attribute.

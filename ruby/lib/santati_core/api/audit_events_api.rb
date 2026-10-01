@@ -44,10 +44,6 @@ module SantatiCore
       if @api_client.config.client_side_validation && event_ingest_request.nil?
         fail ArgumentError, "Missing the required parameter 'event_ingest_request' when calling AuditEventsApi.events_create"
       end
-      if @api_client.config.client_side_validation && !opts[:'idempotency_key'].nil? && opts[:'idempotency_key'].to_s.length > 255
-        fail ArgumentError, 'invalid value for "opts[:"idempotency_key"]" when calling AuditEventsApi.events_create, the character length must be smaller than or equal to 255.'
-      end
-
       # resource path
       local_var_path = '/api/v0/events/'
 
@@ -75,7 +71,7 @@ module SantatiCore
       return_type = opts[:debug_return_type] || 'AuditEvent'
 
       # auth_names
-      auth_names = opts[:debug_auth_names] || []
+      auth_names = opts[:debug_auth_names] || ['ApiKeyAuth']
 
       new_options = opts.merge(
         :operation => :"AuditEventsApi.events_create",
@@ -178,7 +174,7 @@ module SantatiCore
       return_type = opts[:debug_return_type] || 'PaginatedAuditEventList'
 
       # auth_names
-      auth_names = opts[:debug_auth_names] || []
+      auth_names = opts[:debug_auth_names] || ['ApiKeyAuth']
 
       new_options = opts.merge(
         :operation => :"AuditEventsApi.events_list",

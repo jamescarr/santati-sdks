@@ -370,10 +370,7 @@ class AuditEventsApi
             );
         }
 
-        if ($idempotency_key !== null && strlen($idempotency_key) > 255) {
-            throw new \InvalidArgumentException('invalid length for "$idempotency_key" when calling AuditEventsApi.eventsCreate, must be smaller than or equal to 255.');
-        }
-        
+
 
         $resourcePath = '/api/v0/events/';
         $formParams = [];
@@ -436,6 +433,11 @@ class AuditEventsApi
             }
         }
 
+        // this endpoint requires API key authentication
+        $apiKey = $this->config->getApiKeyWithPrefix('Authorization');
+        if ($apiKey !== null) {
+            $headers['Authorization'] = $apiKey;
+        }
 
         $defaultHeaders = [];
         if ($this->config->getUserAgent()) {
@@ -898,6 +900,11 @@ class AuditEventsApi
             }
         }
 
+        // this endpoint requires API key authentication
+        $apiKey = $this->config->getApiKeyWithPrefix('Authorization');
+        if ($apiKey !== null) {
+            $headers['Authorization'] = $apiKey;
+        }
 
         $defaultHeaders = [];
         if ($this->config->getUserAgent()) {

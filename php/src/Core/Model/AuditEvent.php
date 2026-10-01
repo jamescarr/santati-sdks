@@ -364,10 +364,6 @@ class AuditEvent implements ModelInterface, ArrayAccess, \JsonSerializable
         if ($this->container['trail'] === null) {
             $invalidProperties[] = "'trail' can't be null";
         }
-        if ((mb_strlen($this->container['trail']) > 64)) {
-            $invalidProperties[] = "invalid value for 'trail', the character length must be smaller than or equal to 64.";
-        }
-
         if ($this->container['event'] === null) {
             $invalidProperties[] = "'event' can't be null";
         }
@@ -377,10 +373,6 @@ class AuditEvent implements ModelInterface, ArrayAccess, \JsonSerializable
         if ($this->container['received_at'] === null) {
             $invalidProperties[] = "'received_at' can't be null";
         }
-        if (!is_null($this->container['organization_id']) && (mb_strlen($this->container['organization_id']) > 255)) {
-            $invalidProperties[] = "invalid value for 'organization_id', the character length must be smaller than or equal to 255.";
-        }
-
         if ($this->container['actor'] === null) {
             $invalidProperties[] = "'actor' can't be null";
         }
@@ -466,10 +458,6 @@ class AuditEvent implements ModelInterface, ArrayAccess, \JsonSerializable
         if (is_null($trail)) {
             throw new \InvalidArgumentException('non-nullable trail cannot be null');
         }
-        if ((mb_strlen($trail) > 64)) {
-            throw new \InvalidArgumentException('invalid length for $trail when calling AuditEvent., must be smaller than or equal to 64.');
-        }
-
         $this->container['trail'] = $trail;
 
         return $this;
@@ -578,10 +566,6 @@ class AuditEvent implements ModelInterface, ArrayAccess, \JsonSerializable
         if (is_null($organization_id)) {
             throw new \InvalidArgumentException('non-nullable organization_id cannot be null');
         }
-        if ((mb_strlen($organization_id) > 255)) {
-            throw new \InvalidArgumentException('invalid length for $organization_id when calling AuditEvent., must be smaller than or equal to 255.');
-        }
-
         $this->container['organization_id'] = $organization_id;
 
         return $this;

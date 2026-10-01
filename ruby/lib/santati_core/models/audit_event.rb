@@ -223,10 +223,6 @@ module SantatiCore
         invalid_properties.push('invalid value for "trail", trail cannot be nil.')
       end
 
-      if @trail.to_s.length > 64
-        invalid_properties.push('invalid value for "trail", the character length must be smaller than or equal to 64.')
-      end
-
       if @event.nil?
         invalid_properties.push('invalid value for "event", event cannot be nil.')
       end
@@ -237,10 +233,6 @@ module SantatiCore
 
       if @received_at.nil?
         invalid_properties.push('invalid value for "received_at", received_at cannot be nil.')
-      end
-
-      if !@organization_id.nil? && @organization_id.to_s.length > 255
-        invalid_properties.push('invalid value for "organization_id", the character length must be smaller than or equal to 255.')
       end
 
       if @actor.nil?
@@ -276,11 +268,9 @@ module SantatiCore
       warn '[DEPRECATED] the `valid?` method is obsolete'
       return false if @id.nil?
       return false if @trail.nil?
-      return false if @trail.to_s.length > 64
       return false if @event.nil?
       return false if @created_at.nil?
       return false if @received_at.nil?
-      return false if !@organization_id.nil? && @organization_id.to_s.length > 255
       return false if @actor.nil?
       return false if @targets.nil?
       return false if @metadata.nil?
@@ -305,10 +295,6 @@ module SantatiCore
     def trail=(trail)
       if trail.nil?
         fail ArgumentError, 'trail cannot be nil'
-      end
-
-      if trail.to_s.length > 64
-        fail ArgumentError, 'invalid value for "trail", the character length must be smaller than or equal to 64.'
       end
 
       @trail = trail
@@ -342,20 +328,6 @@ module SantatiCore
       end
 
       @received_at = received_at
-    end
-
-    # Custom attribute writer method with validation
-    # @param [Object] organization_id Value to be assigned
-    def organization_id=(organization_id)
-      if organization_id.nil?
-        fail ArgumentError, 'organization_id cannot be nil'
-      end
-
-      if organization_id.to_s.length > 255
-        fail ArgumentError, 'invalid value for "organization_id", the character length must be smaller than or equal to 255.'
-      end
-
-      @organization_id = organization_id
     end
 
     # Custom attribute writer method with validation
