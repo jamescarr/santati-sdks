@@ -1,0 +1,31 @@
+[package]
+name = "santati"
+version = "0.0.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+description = "Official Rust SDK for the Santati audit-log API"
+repository = "https://github.com/jamescarr/santati-sdks"
+readme = "README.md"
+keywords = ["audit", "audit-log", "logging"]
+categories = ["api-bindings"]
+
+[dependencies]
+reqwest = { version = "0.13", features = ["json", "query"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = { version = "3.8", default-features = false, features = ["std"] }
+tokio = { version = "1", features = ["time"] }
+uuid = { version = "1", features = ["v4"] }
+futures-util = "0.3"
+fastrand = "2"
+url = "2.5"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+wiremock = "0.6"
+libtest-mimic = "0.8"
+
+[[test]]
+name = "conformance"
+harness = false
