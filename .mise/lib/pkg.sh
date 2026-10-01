@@ -229,9 +229,11 @@ pkg_secrets() {
   esac
 }
 
-# The mise tools a package's checks need, comma-separated: CI's
-# MISE_ENABLE_TOOLS. `node` is always there for conformance/check.mjs; the
-# package tools run the suite.
+# The mise tools a package's checks need, comma-separated. ci.yml turns the
+# commas into spaces and hands them to mise-action's `install_args`, so a job
+# installs only its package's toolchain. `node` is always there for
+# conformance/check.mjs; php's install ships composer (vfox-php puts it in
+# php's bin), so composer needs no entry of its own.
 pkg_tools() {
   case "$(pkg_kind "$1")" in
     python) echo uv,node ;;
@@ -240,10 +242,7 @@ pkg_tools() {
     cargo) echo rust,node ;;
     hex) echo erlang,elixir,node ;;
     gem) echo ruby,node ;;
-    # `http:composer` is the http backend's name for the composer phar: the
-    # bare `composer` is not in mise's registry, so `mise install composer`
-    # fails.
-    composer) echo php,http:composer,node ;;
+    composer) echo php,node ;;
   esac
 }
 

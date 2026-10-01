@@ -12,7 +12,3 @@ elixir = "1.20.4-otp-29"
 ruby = "4.0.7"
 php = "8.5.11"
 actionlint = "1.7.12"
-
-# Composer is not a core mise plugin; the http backend fetches the release phar
-# (checksum from https://getcomposer.org/download/2.10.3/composer.phar.sha256sum).
-"http:composer" = { version = "2.10.3", url = "https://getcomposer.org/download/2.10.3/composer.phar", bin_path = "composer", checksum = "sha256:7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6" }
