@@ -53,6 +53,7 @@ module Santati
       config.scheme = uri.scheme
       config.host = "#{uri.host}:#{uri.port}"
       config.base_path = uri.path
+      # The generated core applies the spec's ApiKeyAuth scheme from these two.
       config.api_key["Authorization"] = api_key
       config.api_key_prefix["Authorization"] = "Api-Key"
       config.timeout = timeout_ms / 1000.0
@@ -62,7 +63,6 @@ module Santati
       api_client = SantatiCore::ApiClient.new(config)
       api_client.user_agent = "santati-ruby/#{VERSION}"
       api_client.default_headers.merge!(headers.transform_keys(&:to_s))
-      api_client.default_headers["Authorization"] = "Api-Key #{api_key}"
       api_client
     end
   end

@@ -68,6 +68,7 @@ final class Client
         $this->trail = $trail === null || $trail === '' ? null : $trail;
         $this->retry = new Retry($maxRetries, $initialBackoffMs, $maxBackoffMs);
 
+        // The generated core applies the spec's ApiKeyAuth scheme from this key and prefix.
         $config = (new Configuration())
             ->setHost($this->baseUrl)
             ->setApiKey('Authorization', $apiKey)
@@ -80,7 +81,7 @@ final class Client
             'allow_redirects' => false,
             'timeout' => $timeout,
             'connect_timeout' => $timeout,
-            'headers' => self::mergeHeaders($apiKey, $headers),
+            'headers' => self::mergeHeaders($headers),
         ]);
 
         $this->api = new AuditEventsApi($http, $config);
@@ -97,12 +98,9 @@ final class Client
      *
      * @return array<string, string>
      */
-    private static function mergeHeaders(string $apiKey, array $headers): array
+    private static function mergeHeaders(array $headers): array
     {
-        $merged = [
-            'Authorization' => 'Api-Key ' . $apiKey,
-            'User-Agent' => self::userAgent(),
-        ];
+        $merged = ['User-Agent' => self::userAgent()];
 
         foreach ($headers as $name => $value) {
             $name = (string) $name;

@@ -1,6 +1,7 @@
 package santati
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ type Client struct {
 	// Events emits, lists and streams audit events.
 	Events *Events
 
+	apiKey         string
 	trail          string
 	maxRetries     int
 	initialBackoff time.Duration
@@ -120,12 +122,12 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 			return http.ErrUseLastResponse
 		},
 	}
-	coreCfg.AddDefaultHeader("Authorization", "Api-Key "+apiKey)
 	for key, value := range cfg.headers {
 		coreCfg.AddDefaultHeader(key, value)
 	}
 
 	c := &Client{
+		apiKey:         apiKey,
 		trail:          cfg.trail,
 		maxRetries:     cfg.maxRetries,
 		initialBackoff: cfg.initialBackoff,
@@ -134,4 +136,12 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 	}
 	c.Events = &Events{client: c}
 	return c, nil
+}
+
+// authorize returns ctx carrying the API key under the spec's ApiKeyAuth
+// scheme, which is where the generated core reads it from.
+func (c *Client) authorize(ctx context.Context) context.Context {
+	return context.WithValue(ctx, core.ContextAPIKeys, map[string]core.APIKey{
+		"ApiKeyAuth": {Key: c.apiKey, Prefix: "Api-Key"},
+	})
 }

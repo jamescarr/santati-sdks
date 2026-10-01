@@ -92,17 +92,18 @@ class Santati:
 
         self._timeout_seconds = timeout_ms / 1000
         self._retry = RetryPolicy(max_retries, initial_backoff_ms, max_backoff_ms)
+        # The generated core applies the spec's `ApiKeyAuth` scheme itself: it
+        # reads the key and the `Api-Key` prefix from the configuration.
         self._api_client = ApiClient(
             Configuration(
                 host=self.base_url,
+                api_key={"ApiKeyAuth": api_key},
+                api_key_prefix={"ApiKeyAuth": "Api-Key"},
                 retries=urllib3.util.Retry(total=0, redirect=False),
             )
         )
         self._api_client.user_agent = f"santati-python/{__version__}"
-        # The generated core carries no security scheme, so it has no auth
-        # plumbing of its own: the key goes on as a default header, which wins
-        # over any per-call header the generated serializers set.
-        _apply_default_headers(self._api_client, {"Authorization": f"Api-Key {api_key}", **self.headers})
+        _apply_default_headers(self._api_client, self.headers)
         self._api = AuditEventsApi(self._api_client)
 
         self.events = Events(self)

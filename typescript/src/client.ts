@@ -254,13 +254,13 @@ export class Events {
 
   constructor(config: ClientConfig) {
     this.config = config;
-    // The generated core carries no security scheme for the key, so it goes out
-    // as a default header (and `User-Agent` cannot be set per call).
+    // The generated core applies the spec's `ApiKeyAuth` scheme from `apiKey`;
+    // `User-Agent` cannot be set per call, so it rides on the configuration.
     this.api = new AuditEventsApi(
       new Configuration({
         basePath: config.baseUrl,
+        apiKey: () => `Api-Key ${config.apiKey}`,
         headers: {
-          Authorization: `Api-Key ${config.apiKey}`,
           "User-Agent": `santati-typescript/${VERSION}`,
           ...config.headers,
         },

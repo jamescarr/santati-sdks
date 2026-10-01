@@ -31,7 +31,7 @@ func (e *Events) Emit(ctx context.Context, input EventInput) (*EmitResult, error
 	if err != nil {
 		return nil, err
 	}
-	request := e.client.api.AuditEventsAPI.EventsCreate(ctx).
+	request := e.client.api.AuditEventsAPI.EventsCreate(e.client.authorize(ctx)).
 		EventIngestRequest(core.EventEnvelopeRequestAsEventIngestRequest(envelope))
 	return run(ctx, e.client, func() (*EmitResult, error) {
 		return e.client.emitOnce(request, key)
@@ -54,7 +54,7 @@ func (e *Events) EmitBatch(ctx context.Context, events []EventInput) (*BatchResu
 		}
 		envelopes[i] = *envelope
 	}
-	request := e.client.api.AuditEventsAPI.EventsCreate(ctx).
+	request := e.client.api.AuditEventsAPI.EventsCreate(e.client.authorize(ctx)).
 		EventIngestRequest(core.EventBatchRequestAsEventIngestRequest(&core.EventBatchRequest{Events: envelopes}))
 	return run(ctx, e.client, func() (*BatchResult, error) {
 		return e.client.batchOnce(request)
@@ -226,7 +226,7 @@ func (c *Client) listOnce(request core.ApiEventsListRequest) (*EventPage, error)
 }
 
 func (c *Client) listRequest(ctx context.Context, params ListParams) core.ApiEventsListRequest {
-	request := c.api.AuditEventsAPI.EventsList(ctx)
+	request := c.api.AuditEventsAPI.EventsList(c.authorize(ctx))
 	if params.ActorID != "" {
 		request = request.ActorId(params.ActorID)
 	}
