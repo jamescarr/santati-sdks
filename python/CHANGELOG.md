@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-01
+
 ### Added
 
 - Framework integrations under `santati.integrations`, each behind an extra:
@@ -17,3 +19,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hands them to a `dispatch` callable, and never raises into the framework.
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
+
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/python-v0.1.0...HEAD
+[0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/python-v0.1.0
