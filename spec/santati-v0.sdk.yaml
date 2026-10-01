@@ -1,0 +1,801 @@
+openapi: 3.0.3
+info:
+  title: Santati
+  version: 0.2.1
+  description: 'Santati''s HTTP API. Operations under `/api/v0/` take a team API key in `Authorization: Api-Key <key>`; a
+    missing, invalid or under-scoped key is answered with `403`, never `401`. Errors on `/api/v0/` use one of three bodies:
+    `ErrorDetail` (`{"detail": ...}`), `FieldErrors` (messages keyed by request field) or `ErrorEnvelope` (`{"error": {"code",
+    "message", "field"}}`, returned by event ingestion and log stream quota checks). Lists on `/api/v0/` are cursor-paginated:
+    follow `next` until it is `null`.'
+paths:
+  /api/v0/events/:
+    get:
+      operationId: events_list
+      description: 'Audit events received on this tenant''s audit log trails, newest first. The list is cursor-paginated:
+        follow ``next`` until it is ``null``. ``sort=relevance`` requires ``q`` and pages at most the first 10000 matches.'
+      summary: List audit events
+      parameters:
+      - in: query
+        name: actor_id
+        schema:
+          type: string
+        description: Exact context.actor.id.
+      - in: query
+        name: actor_type
+        schema:
+          type: string
+        description: 'One of: user, system, anonymous.'
+      - in: query
+        name: created_after
+        schema:
+          type: string
+        description: RFC 3339 instant or date, inclusive, on the producer's timestamp.
+      - in: query
+        name: created_before
+        schema:
+          type: string
+        description: Same parsing, inclusive.
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Opaque cursor from the previous page.
+      - in: query
+        name: event
+        schema:
+          type: string
+        description: Exact event type, e.g. invoice.voided.
+      - in: query
+        name: event_prefix
+        schema:
+          type: string
+        description: Events whose type starts with this literal prefix.
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: Page size, up to 1000.
+      - in: query
+        name: organization_id
+        schema:
+          type: string
+        description: Producer's own organization id.
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: 'Full-text search over payload and metadata: at least one letter or digit, at most 200 characters, terms
+          are ANDed prefixes. Relevance paging stops at the first 10000 matches.'
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum:
+          - occurred_at
+          - relevance
+        description: occurred_at (default) or relevance; relevance requires q.
+      - in: query
+        name: target_id
+        schema:
+          type: string
+        description: Events acting on this target id.
+      - in: query
+        name: target_type
+        schema:
+          type: string
+        description: Events acting on a target of this type.
+      - in: query
+        name: trail
+        schema:
+          type: string
+        description: Only events from this audit log trail.
+      tags:
+      - audit-events
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditEventList'
+              examples:
+                InvoiceVoided:
+                  value:
+                    next: https://api.santati.io/api/v0/events/?cursor=cD00ODY%3D
+                    previous: https://api.santati.io/api/v0/events/?cursor=cj0xJnA9NDg3
+                    results:
+                    - id: 01J9Z6K3M4QX8RT2VN5B7HCWDA
+                      trail: billing
+                      event: invoice.voided
+                      created_at: '2026-09-29T14:03:11.482000Z'
+                      received_at: '2026-09-29T14:03:12.019000Z'
+                      organization_id: org_acme_logistics
+                      actor:
+                        type: user
+                        id: usr_123
+                        name: Dana Ortiz
+                        metadata: {}
+                      targets:
+                      - type: invoice
+                        id: inv_555
+                        name: INV-555
+                        metadata: {}
+                      metadata:
+                        source: dashboard
+                        region: us-east
+                      data:
+                        object: invoice
+                        id: inv_555
+                        customer_id: cus_987
+                        status: void
+                        amount_cents: 4200
+                        currency: usd
+                      context:
+                        correlation:
+                          request_id: req_7f3a9c
+                      hash: b7c0f2a5d8e14f3a6c9b2d5e8f1a4c7b0d3e6f9a2c5b8d1e4f7a0c3b6d9e2f5a
+                      schema_version: 1
+                  summary: Invoice voided
+          description: A page of this team's events, newest first.
+        '400':
+          description: 'A query parameter is unusable: an unknown actor type, an unusable date, a relevance sort without q,
+            or a relevance cursor beyond the window.'
+        '403':
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          description: The cursor is not one this endpoint issued.
+    post:
+      operationId: events_create
+      description: 'Index one event, or a batch, from the producer envelope. Requires a team API key with the ``write`` (or
+        ``manage``) scope. Send either one envelope object or ``{"events": [...]}``; a batch answers 207 with per-item results
+        and 202 when every item was accepted. A repeated ``Idempotency-Key`` (or envelope ``idempotency_key``) within 24 hours
+        returns the event already stored instead of indexing a second one.'
+      summary: Send audit events
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Replay guard for a single-event request. Sending the same key again on the same trail within 24 hours
+          returns the event already stored (`200`) instead of indexing a second one. A longer key than 255 characters is a
+          `400 invalid_envelope`. An event''s own `idempotency_key` beats this header for that event. Do not send it with
+          a multi-event batch: it becomes the key of every event that has none of its own, and keys are scoped to the team
+          and trail, so each later such event on the same trail is reported `duplicate` with the first event''s id and is
+          not written.'
+      tags:
+      - audit-events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventIngestRequest'
+            examples:
+              SingleEvent:
+                value:
+                  event: invoice.voided
+                  trail: billing
+                  created_at: '2026-09-29T14:03:11.482000Z'
+                  organization_id: org_acme_logistics
+                  idempotency_key: invoice-voided-inv_555
+                  actor:
+                    type: user
+                    id: usr_123
+                    name: Dana Ortiz
+                    metadata: {}
+                  targets:
+                  - type: invoice
+                    id: inv_555
+                    name: INV-555
+                    metadata: {}
+                  metadata:
+                    source: dashboard
+                    region: us-east
+                  data:
+                    object: invoice
+                    id: inv_555
+                    status: void
+                  context:
+                    correlation:
+                      request_id: req_7f3a9c
+                summary: Single event
+              BatchOfEvents:
+                value:
+                  events:
+                  - event: invoice.voided
+                    trail: billing
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    organization_id: org_acme_logistics
+                    idempotency_key: invoice-voided-inv_555
+                    actor:
+                      type: user
+                      id: usr_123
+                      name: Dana Ortiz
+                      metadata: {}
+                    targets:
+                    - type: invoice
+                      id: inv_555
+                      name: INV-555
+                      metadata: {}
+                    metadata:
+                      source: dashboard
+                    data:
+                      object: invoice
+                      id: inv_555
+                      status: void
+                    context: {}
+                  - event: invoice.paid
+                    trail: billing
+                    created_at: '2026-09-29T14:04:07.113000Z'
+                    organization_id: org_acme_logistics
+                    idempotency_key: invoice-paid-inv_555
+                    actor:
+                      type: user
+                      id: usr_123
+                      name: Dana Ortiz
+                      metadata: {}
+                    targets:
+                    - type: invoice
+                      id: inv_555
+                      name: INV-555
+                      metadata: {}
+                    metadata:
+                      source: dashboard
+                    data:
+                      object: invoice
+                      id: inv_555
+                      status: paid
+                    context: {}
+                summary: Batch of events
+        required: true
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEvent'
+              examples:
+                EventRecorded:
+                  value:
+                    id: 01J9Z6K3M4QX8RT2VN5B7HCWDA
+                    trail: billing
+                    event: invoice.voided
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    received_at: '2026-09-29T14:03:12.019000Z'
+                    organization_id: org_acme_logistics
+                    actor:
+                      type: user
+                      id: usr_123
+                      name: Dana Ortiz
+                      metadata: {}
+                    targets:
+                    - type: invoice
+                      id: inv_555
+                      name: INV-555
+                      metadata: {}
+                    metadata:
+                      source: dashboard
+                      region: us-east
+                    data:
+                      object: invoice
+                      id: inv_555
+                      customer_id: cus_987
+                      status: void
+                      amount_cents: 4200
+                      currency: usd
+                    context:
+                      correlation:
+                        request_id: req_7f3a9c
+                    hash: ''
+                    schema_version: 1
+                  summary: Event recorded
+          description: The event was indexed. Its chain seal task runs after this response, so `hash` is empty.
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEvent'
+              examples:
+                IdempotentReplay:
+                  value:
+                    id: 01J9Z6K3M4QX8RT2VN5B7HCWDA
+                    trail: billing
+                    event: invoice.voided
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    received_at: '2026-09-29T14:03:12.019000Z'
+                    organization_id: org_acme_logistics
+                    actor:
+                      type: user
+                      id: usr_123
+                      name: Dana Ortiz
+                      metadata: {}
+                    targets:
+                    - type: invoice
+                      id: inv_555
+                      name: INV-555
+                      metadata: {}
+                    metadata:
+                      source: dashboard
+                      region: us-east
+                    data:
+                      object: invoice
+                      id: inv_555
+                      customer_id: cus_987
+                      status: void
+                      amount_cents: 4200
+                      currency: usd
+                    context:
+                      correlation:
+                        request_id: req_7f3a9c
+                    hash: b7c0f2a5d8e14f3a6c9b2d5e8f1a4c7b0d3e6f9a2c5b8d1e4f7a0c3b6d9e2f5a
+                    schema_version: 1
+                  summary: Idempotent replay
+          description: The event was already stored under the same idempotency key; the stored copy is returned.
+        '202':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventBatchResult'
+              examples:
+                BatchAccepted:
+                  value:
+                    accepted: 2
+                    rejected: 0
+                    results:
+                    - index: 0
+                      status: accepted
+                      id: 01J9Z6K3M4QX8RT2VN5B7HCWDA
+                    - index: 1
+                      status: duplicate
+                      id: 01J9Z6K3M4QX8RT2VN5B7HCWDB
+                  summary: Batch accepted
+          description: A batch was submitted and every item was indexed (or replayed).
+        '207':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventBatchResult'
+              examples:
+                BatchPartiallyRejected:
+                  value:
+                    accepted: 1
+                    rejected: 1
+                    results:
+                    - index: 0
+                      status: accepted
+                      id: 01J9Z6K3M4QX8RT2VN5B7HCWDA
+                    - index: 1
+                      status: rejected
+                      error:
+                        code: unknown_action
+                        message: Action 'invoice.deleted' is not defined for this team.
+                        field: event
+                  summary: Batch partially rejected
+          description: A batch was submitted and at least one item was rejected; the other items were indexed.
+        '400':
+          description: 'The event could not be indexed: the body is not a JSON object, the batch is empty, the `Idempotency-Key`
+            header is over 255 characters, or one event was rejected (a rejected single event answers its own code).'
+        '403':
+          description: Missing, invalid or under-scoped API key, or an event naming a trail this key may not write to.
+        '413':
+          description: The request body or the batch is larger than the published ceiling.
+        '429':
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Whole seconds to wait before retrying, sent on every 429.
+          description: This team is over its request rate or its monthly event quota.
+components:
+  schemas:
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The producer's event id, or a generated ULID when none was sent.
+        trail:
+          type: string
+          description: The audit log trail the event was indexed on.
+          maxLength: 64
+        event:
+          type: string
+          description: The event type, e.g. invoice.voided.
+        created_at:
+          type: string
+          description: RFC 3339, when the producer says the event happened.
+        received_at:
+          type: string
+          description: RFC 3339, when Santati indexed the event.
+        organization_id:
+          type: string
+          description: The end-customer organization the producer attributed the event to; empty when none.
+          maxLength: 255
+        actor:
+          allOf:
+          - $ref: '#/components/schemas/EventActor'
+          description: 'Who acted: the actor columns first, the producer''s payload behind them.'
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventTarget'
+          description: The objects this event acted on, in the producer's order.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: The event's own key/value map; keys and values are strings on the wire.
+        data:
+          type: object
+          additionalProperties: {}
+          description: The producer's own payload for the event, stored verbatim.
+        context:
+          type: object
+          additionalProperties: {}
+          description: 'The producer''s extra context, stored verbatim; the read path falls back to it for
+
+            `actor` and `targets` when the top-level members are absent.'
+        hash:
+          type: string
+          description: sha256 of this event's chain record; empty until the seal task has run.
+        schema_version:
+          type: integer
+          nullable: true
+          description: The event schema version the event was validated against.
+      required:
+      - actor
+      - context
+      - created_at
+      - data
+      - event
+      - hash
+      - id
+      - metadata
+      - received_at
+      - schema_version
+      - targets
+      - trail
+    ErrorBody:
+      type: object
+      description: One rejection, in the shape contracts §7 reserves for event ingestion.
+      required:
+      - code
+      - message
+      - field
+      properties:
+        code:
+          type: string
+          description: 'Reserved failure code, one of: `invalid_envelope`, `unknown_field`, `invalid_actor_type`, `metadata_limit_exceeded`,
+            `too_many_targets`, `unknown_action`, `schema_validation_failed`, `unknown_organization`, `quota_exceeded`, `rate_limited`,
+            `trail_not_allowed`, `payload_too_large`. New codes are additive.'
+        message:
+          type: string
+          description: Human-readable explanation of this particular failure.
+        field:
+          type: string
+          nullable: true
+          description: The request field at fault, or null when no single field is.
+    EventActor:
+      type: object
+      description: 'Who acted, in the producer''s own ids.
+
+
+        Documentation-only on the write path — `apps.audit_trails.ingest` is the
+
+        validator — and the shape `AuditEventSerializer.get_actor` always returns, so
+
+        every key is present on a read even when the producer sent none of them.'
+      properties:
+        type:
+          type: string
+          description: 'Actor kind: user, system or anonymous. The relay path stores whatever Ankusa relayed.'
+          maxLength: 64
+        id:
+          type: string
+          description: The actor's id in the producer's own namespace; required unless `type` is anonymous.
+          maxLength: 255
+        name:
+          type: string
+          description: Human-readable actor name; empty when unknown.
+          maxLength: 255
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 500
+          description: 'Actor metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
+            500 characters.'
+      required:
+      - type
+    EventActorRequest:
+      type: object
+      description: 'Who acted, in the producer''s own ids.
+
+
+        Documentation-only on the write path — `apps.audit_trails.ingest` is the
+
+        validator — and the shape `AuditEventSerializer.get_actor` always returns, so
+
+        every key is present on a read even when the producer sent none of them.'
+      properties:
+        type:
+          type: string
+          minLength: 1
+          description: 'Actor kind: user, system or anonymous. The relay path stores whatever Ankusa relayed.'
+          maxLength: 64
+        id:
+          type: string
+          minLength: 1
+          description: The actor's id in the producer's own namespace; required unless `type` is anonymous.
+          maxLength: 255
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable actor name; empty when unknown.
+          maxLength: 255
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 500
+          description: 'Actor metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
+            500 characters.'
+      required:
+      - type
+    EventBatchItemResult:
+      type: object
+      description: 'One batch result item: accepted or duplicate items carry id, rejected items carry error.'
+      required:
+      - index
+      - status
+      properties:
+        index:
+          type: integer
+        status:
+          type: string
+          enum:
+          - accepted
+          - duplicate
+          - rejected
+        id:
+          type: string
+        error:
+          $ref: '#/components/schemas/ErrorBody'
+    EventBatchRequest:
+      type: object
+      description: 'Documentation-only shape of a batch ingest request: ``{"events": [...]}``.
+
+
+        One request may carry at most `MAX_EVENTS_PER_BATCH` envelopes; the whole body
+
+        is capped at 1 MiB.'
+      properties:
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventEnvelopeRequest'
+          description: One to 500 envelopes, indexed in order.
+      required:
+      - events
+    EventBatchResult:
+      type: object
+      description: 'Documentation-only shape of a batch ingest response.
+
+
+        Mirrors `apps.audit_trails.api_views._batch_response`: one entry per submitted
+
+        event, in submission order, an accepted or duplicate entry carrying the stored
+
+        event''s id and a rejected entry carrying the error envelope instead. The
+
+        response is 202 when nothing was rejected and 207 when anything was.'
+      properties:
+        accepted:
+          type: integer
+          description: How many events this request indexed (including idempotent replays).
+        rejected:
+          type: integer
+          description: How many events this request rejected.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventBatchItemResult'
+          description: One result per submitted event, in submission order.
+      required:
+      - accepted
+      - rejected
+      - results
+    EventEnvelopeRequest:
+      type: object
+      description: 'Documentation-only shape of one producer envelope.
+
+
+        Never used to validate: `apps.audit_trails.envelope.parse_envelope` is the
+
+        single validator, because it also has to serve the relay path''s lenient
+
+        mode. This class exists so the OpenAPI schema and the generated client show
+
+        producers what to send, in the envelope''s field order.
+
+
+        The published limits are enforced by ingest, not here: the three metadata maps
+
+        (the event''s, the actor''s and each target''s) hold at most 50 keys, keys are at
+
+        most 40 characters of `A-Z a-z 0-9 _ . -`, values are at most 500 characters,
+
+        and an event names at most 10 targets.'
+      properties:
+        event:
+          type: string
+          minLength: 1
+          description: The event type, e.g. invoice.voided.
+          maxLength: 255
+        trail:
+          type: string
+          minLength: 1
+          description: The audit log trail to index this event on; the key must be scoped to it.
+          maxLength: 64
+        created_at:
+          type: string
+          description: 'RFC 3339 with an offset: when the event happened. Defaults to receipt time; a timestamp without an
+            offset is refused.'
+        organization_id:
+          type: string
+          minLength: 1
+          description: The end-customer organization this event belongs to.
+          maxLength: 255
+        idempotency_key:
+          type: string
+          minLength: 1
+          description: 'Replay guard, per trail: a repeat of the same key within 24 hours returns the event already stored
+            instead of indexing a new one.'
+          maxLength: 255
+        actor:
+          allOf:
+          - $ref: '#/components/schemas/EventActorRequest'
+          description: Who acted; omit it for an event with no actor.
+        targets:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventTargetRequest'
+          description: The objects the event acted on; at most 10.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 500
+          description: 'Event metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
+            500 characters.'
+        data:
+          description: The producer's own payload for the event, stored verbatim and never interpreted.
+        context:
+          type: object
+          additionalProperties: {}
+          description: Extra producer context, stored verbatim; `context.actor` and `context.targets` are read as a fallback
+            when the top-level members are absent.
+      required:
+      - event
+      - trail
+    EventIngestRequest:
+      oneOf:
+      - $ref: '#/components/schemas/EventEnvelopeRequest'
+      - $ref: '#/components/schemas/EventBatchRequest'
+    EventTarget:
+      type: object
+      description: 'One object an event acted on, in the producer''s own ids.
+
+
+        The shape `AuditEventSerializer.get_targets` returns, and the shape ingest
+
+        accepts on an envelope''s `targets` array.'
+      properties:
+        type:
+          type: string
+          description: Target kind, e.g. invoice; ingest requires a non-empty string.
+          maxLength: 64
+        id:
+          type: string
+          description: The target's id in the producer's own namespace.
+          maxLength: 255
+        name:
+          type: string
+          description: Human-readable target name; empty when unknown.
+          maxLength: 255
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+            maxLength: 500
+          description: 'Target metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
+            500 characters.'
+      required:
+      - id
+      - type
+    EventTargetRequest:
+      type: object
+      description: 'One object an event acted on, in the producer''s own ids.
+
+
+        The shape `AuditEventSerializer.get_targets` returns, and the shape ingest
+
+        accepts on an envelope''s `targets` array.'
+      properties:
+        type:
+          type: string
+          minLength: 1
+          description: Target kind, e.g. invoice; ingest requires a non-empty string.
+          maxLength: 64
+        id:
+          type: string
+          minLength: 1
+          description: The target's id in the producer's own namespace.
+          maxLength: 255
+        name:
+          type: string
+          minLength: 1
+          description: Human-readable target name; empty when unknown.
+          maxLength: 255
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 500
+          description: 'Target metadata: at most 50 keys, each at most 40 characters of A-Z a-z 0-9 _ . -, each value at most
+            500 characters.'
+      required:
+      - id
+      - type
+    PaginatedAuditEventList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          example: https://api.santati.io/api/v0/events/?cursor=cD00ODY%3D
+          description: URL of the next page of results, or null on the last page.
+        previous:
+          type: string
+          nullable: true
+          example: https://api.santati.io/api/v0/events/?cursor=cj0xJnA9NDg3
+          description: URL of the previous page of results, or null on the first page.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+servers:
+- url: https://api.santati.io
+  description: Production
+- url: http://localhost:8000
+  description: Local development
+tags:
+- name: audit-events
+  x-displayName: Audit events
+  description: Send audit events to a trail and search the events a team has recorded.
+- name: audit-trails
+  x-displayName: Audit trails
+  description: Create, list and delete the trails that audit events are sent to.
+- name: chain
+  x-displayName: Chain verification
+  description: Verify a trail's tamper-evident hash chain and download the verification report.
+- name: event-definitions
+  x-displayName: Event definitions
+  description: The event actions defined in a team's schema catalog.
+- name: exports
+  x-displayName: Exports
+  description: Export matching audit events to a CSV or JSON Lines file.
+- name: log-streams
+  x-displayName: Log streams
+  description: Forward a trail's audit events to an outbound webhook.
+- name: organizations
+  x-displayName: Organizations
+  description: The end-customer organizations a team's events are recorded for.

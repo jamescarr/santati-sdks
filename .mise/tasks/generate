@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Prune spec/santati-v0.yaml into the generation profile and regenerate the given cores (default: all)"
+#USAGE arg "[cores]" var=#true help="cores to regenerate (default: all)"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "cores=(${usage_cores:-})"
+uv run --script .mise/lib/generate.py "${cores[@]+"${cores[@]}"}"

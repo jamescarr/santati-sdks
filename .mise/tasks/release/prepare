@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#MISE description="Bump versions, date the CHANGELOGs, and open the release PR for one or more packages"
+#USAGE arg "<bump>" help="patch, minor, major, or an explicit version"
+#USAGE arg "<pkgs>" var=#true help="packages to release in one PR"
+#USAGE flag "--no-pr" help="commit on a local branch only; no origin/main check, push, or PR"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+bump="$usage_bump"
+no_pr="${usage_no_pr:-false}"
+eval "pkgs=($usage_pkgs)"
+
+[ -z "$(git status --porcelain)" ] || fail "working tree is dirty; commit or stash first"
+if [ "$no_pr" != true ]; then pkg_guard_main; fi
+
+# Validate every package before touching anything, so a bad one leaves no
+# branch and no half-applied edits behind.
+dirs=()
+news=()
+tags=()
+kinds=()
+for p in "${pkgs[@]}"; do
+  dir=$(pkg_dir "$p")
+  kind=$(pkg_kind "$p")
+  new=$(elixir .mise/lib/release.exs plan "$dir" "$(pkg_version "$p")" "$bump") ||
+    fail "$p: cannot prepare a '$bump' release"
+  tag=$(pkg_tag "$p" "$new")
+  if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then fail "tag $tag already exists locally"; fi
+  if git ls-remote --exit-code --tags origin "$tag" >/dev/null 2>&1; then fail "tag $tag already exists on origin"; fi
+  dirs+=("$dir")
+  news+=("$new")
+  tags+=("$tag")
+  kinds+=("$kind")
+done
+
+branch="release/${tags[0]}"
+if [ ${#tags[@]} -gt 1 ]; then branch="$branch-and-$((${#tags[@]} - 1))-more"; fi
+if git rev-parse -q --verify "refs/heads/$branch" >/dev/null; then fail "branch $branch already exists"; fi
+git switch -c "$branch"
+
+today=$(date -u +%F)
+subject="chore(release):"
+sep=" "
+i=0
+while [ $i -lt ${#pkgs[@]} ]; do
+  p="${pkgs[$i]}"
+  dir="${dirs[$i]}"
+  kind="${kinds[$i]}"
+  new="${news[$i]}"
+  prev_tag=$(pkg_tag "$p" "$(pkg_version "$p")")
+  if ! git rev-parse -q --verify "refs/tags/$prev_tag" >/dev/null; then prev_tag=""; fi
+
+  elixir .mise/lib/release.exs apply "$dir" "$kind" "$new" "${tags[$i]}" "$prev_tag" "$today"
+  case "$kind" in
+    npm)
+      (cd "$dir" && npm version "$new" --no-git-tag-version --ignore-scripts >/dev/null)
+      ;;
+    python)
+      # --no-sync, not --frozen: uv.lock records the package's own version, so
+      # the bump has to rewrite it or the next `uv sync --locked` (CI on this
+      # PR, then the tag run) fails with "lockfile needs to be updated".
+      # --no-sync keeps it from also creating a .venv in the package directory.
+      (cd "$dir" && uv version "$new" --no-sync >/dev/null)
+      ;;
+    cargo)
+      # Cargo.lock records the crate's own version, so the bump has to rewrite
+      # it or the next `cargo build --locked` (CI on this PR, then
+      # `cargo publish --locked`) fails.
+      (cd "$dir" && cargo update --workspace --quiet)
+      ;;
+    gem)
+      # Gemfile.lock records the gemspec's version too.
+      (cd "$dir" && bundle lock)
+      ;;
+  esac
+  printf '  %-12s -> %s\n' "$p" "$new"
+
+  subject="$subject$sep${tags[$i]}"
+  sep=", "
+  i=$((i + 1))
+done
+
+git add -- "${dirs[@]}"
+git commit -q -m "$subject"
+echo "committed \"$subject\" on $branch"
+
+if [ "$no_pr" = true ]; then
+  echo "--no-pr: nothing pushed"
+  exit 0
+fi
+
+body=""
+i=0
+while [ $i -lt ${#pkgs[@]} ]; do
+  body="$body## ${tags[$i]}"$'\n\n'"$(pkg_notes "${pkgs[$i]}" "${news[$i]}")"$'\n\n'
+  i=$((i + 1))
+done
+
+git push -u origin "$branch"
+gh pr create --base main --head "$branch" --title "$subject" --body "$body"
+echo
+echo "after merge: git switch main && git pull && mise run release:tag ${pkgs[*]}"

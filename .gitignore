@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+python/dist/
+typescript/node_modules/
+typescript/dist/
+rust/target/
+elixir/_build/
+elixir/deps/
+elixir/doc/
+ruby/vendor/
+ruby/*.gem
+php/vendor/
+php/.phpunit.cache/

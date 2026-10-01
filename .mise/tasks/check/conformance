@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Validate conformance/ and run the given SDKs (default: all) against its vectors"
+#USAGE arg "[pkgs]" var=#true help="SDKs to run (default: all)"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "pkgs=(${usage_pkgs:-})"
+node conformance/check.mjs "${pkgs[@]+"${pkgs[@]}"}"

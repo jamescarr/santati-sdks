@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#MISE description="Every CI check for one package: format, lint, type-check, test, and build the way it publishes"
+#USAGE arg "<pkg>" help="package directory to check"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+pkg="$usage_pkg"
+dir=$(pkg_dir "$pkg")
+kind=$(pkg_kind "$pkg")
+cd "$dir"
+
+tmp=""
+cleanup() { if [ -n "$tmp" ]; then rm -rf "$tmp"; fi; }
+trap cleanup EXIT
+
+echo "==> $pkg ($kind)"
+case "$kind" in
+  python)
+    uv sync --locked
+    uv run ruff format --check
+    uv run ruff check
+    uv run mypy
+    uv run pytest
+    tmp=$(mktemp -d)
+    uv build --out-dir "$tmp"
+    ;;
+  npm)
+    npm ci
+    grep -qx "export const VERSION = '$(pkg_version "$pkg")';" src/version.ts ||
+      fail "$dir/src/version.ts is out of sync with package.json"
+    npm run typecheck
+    npm run build
+    npm test
+    npm pack --dry-run
+    ;;
+  go)
+    go mod verify
+    [ -z "$(gofmt -l $(find . -name '*.go' -not -path './internal/core/*'))" ] ||
+      fail "$dir has files gofmt would rewrite: $(gofmt -l $(find . -name '*.go' -not -path './internal/core/*'))"
+    go vet $(go list ./... | grep -v '/internal/core$')
+    go test -race ./...
+    ;;
+  cargo)
+    cargo fmt --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo test --locked
+    cargo package --locked --allow-dirty
+    ;;
+  hex)
+    mix deps.get --check-locked
+    mix deps.unlock --check-unused
+    mix format --check-formatted
+    mix compile --warnings-as-errors
+    mix test
+    tmp=$(mktemp -d)
+    mix hex.build --output "$tmp/santati.tar"
+    ;;
+  gem)
+    BUNDLE_FROZEN=true bundle install
+    bundle exec standardrb
+    bundle exec rake test
+    tmp=$(mktemp -d)
+    gem build santati.gemspec --output "$tmp/santati.gem"
+    ;;
+  composer)
+    composer validate --strict
+    composer install --no-interaction --no-progress
+    vendor/bin/pint --test
+    vendor/bin/phpunit
+    ;;
+esac

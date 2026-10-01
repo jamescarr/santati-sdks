@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#MISE description="Confirm each package's current version is live on its registry"
+#USAGE arg "<pkgs>" var=#true help="packages to verify"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "pkgs=($usage_pkgs)"
+
+for p in "${pkgs[@]}"; do
+  v=$(pkg_version "$p")
+  code=$(pkg_registry_code "$p" "$v")
+  printf '  %-12s %-10s %s\n' "$p" "$v" "$code"
+  [ "$code" = 200 ] || fail "$p $v is not published (HTTP $code)"
+done

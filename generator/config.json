@@ -1,0 +1,30 @@
+{
+  "image": "openapitools/openapi-generator-cli:v7.25.0",
+  "operations": ["events_create", "events_list"],
+  "cores": {
+    "python": {"generator": "python",
+      "properties": {"packageName": "santati_core", "library": "urllib3", "generateSourceCodeOnly": "true"},
+      "outputs": [{"from": "santati_core", "to": "python/src/santati_core"}]},
+    "typescript": {"generator": "typescript-fetch",
+      "properties": {"supportsES6": "true", "importFileExtension": ".js"},
+      "outputs": [{"from": "apis", "to": "typescript/src/core/apis"}, {"from": "models", "to": "typescript/src/core/models"},
+                  {"from": "runtime.ts", "to": "typescript/src/core/runtime.ts"}, {"from": "index.ts", "to": "typescript/src/core/index.ts"}]},
+    "go": {"generator": "go",
+      "properties": {"packageName": "core", "isGoSubmodule": "true", "withGoMod": "false", "enumClassPrefix": "true",
+                     "disallowAdditionalPropertiesIfNotPresent": "false"},
+      "outputs": [{"from": "*.go", "to": "go/internal/core"}]},
+    "rust": {"generator": "rust",
+      "properties": {"packageName": "santati-core", "avoidBoxedModels": "true", "useChrono": "false"},
+      "outputs": [{"from": "src/models", "to": "rust/src/generated/models"}]},
+    "elixir": {"generator": "elixir",
+      "properties": {"invokerPackage": "SantatiCore", "packageName": "santati_core"},
+      "outputs": [{"from": "lib/santati_core", "to": "elixir/lib/santati_core"}]},
+    "ruby": {"generator": "ruby",
+      "properties": {"gemName": "santati_core", "moduleName": "SantatiCore", "library": "faraday"},
+      "nameMappings": {"hash": "chain_hash"},
+      "outputs": [{"from": "lib/santati_core.rb", "to": "ruby/lib/santati_core.rb"}, {"from": "lib/santati_core", "to": "ruby/lib/santati_core"}]},
+    "php": {"generator": "php",
+      "properties": {"invokerPackage": "Santati\\Core", "srcBasePath": "src"},
+      "outputs": [{"from": "src", "to": "php/src/Core"}]}
+  }
+}

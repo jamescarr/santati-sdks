@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#MISE description="Fetch dependencies for the given packages (default: every package)"
+#USAGE arg "[pkgs]" var=#true help="packages to fetch deps for (default: all)"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "pkgs=(${usage_pkgs:-})"
+if [ ${#pkgs[@]} -eq 0 ]; then pkgs=($(pkg_names)); fi
+
+for p in "${pkgs[@]}"; do
+  dir=$(pkg_dir "$p")
+  kind=$(pkg_kind "$p")
+  echo "==> $p ($kind)"
+  case "$kind" in
+    python) (cd "$dir" && uv sync) ;;
+    npm) (cd "$dir" && npm ci) ;;
+    go) (cd "$dir" && go mod download) ;;
+    cargo) (cd "$dir" && cargo fetch) ;;
+    hex) (cd "$dir" && mix deps.get) ;;
+    gem) (cd "$dir" && bundle install) ;;
+    composer) (cd "$dir" && composer install --no-interaction --no-progress) ;;
+  esac
+done

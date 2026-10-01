@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+#MISE description="Replace spec/santati-v0.yaml with the control plane's public spec at <ref>"
+#USAGE arg "[ref]" help="branch, tag or sha of jamescarr/santati-control-plane (default: main)"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+ref="${usage_ref:-main}"
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+
+# The control-plane repo is private and api.santati.io does not serve the spec
+# yet, so the fetch goes through the GitHub API with `gh` auth (GH_TOKEN in CI).
+gh api -H "Accept: application/vnd.github.raw" \
+  "repos/$SPEC_REPO/contents/docs/openapi/v0.yaml?ref=$ref" >"$tmp" ||
+  fail "could not fetch docs/openapi/v0.yaml at $ref from $SPEC_REPO"
+
+version=$(awk '/^info:/{f=1;next} f&&/^[^ ]/{exit} f&&$1=="version:"{print $2;exit}' "$tmp" | tr -d "\"'")
+[ -n "$version" ] || fail "no info.version in docs/openapi/v0.yaml at $ref from $SPEC_REPO"
+
+mv "$tmp" spec/santati-v0.yaml
+printf '%s\n' "$version" >spec/SPEC_VERSION
+echo "spec/santati-v0.yaml: $version ($ref)"
+git --no-pager diff --stat -- spec/
+echo "next: mise run generate"

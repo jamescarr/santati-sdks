@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Regenerate the cores into a temporary tree and diff: fails when the committed generated code is stale"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+uv run --script .mise/lib/generate.py --check

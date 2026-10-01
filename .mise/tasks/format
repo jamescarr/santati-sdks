@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#MISE description="Format the given packages (default: every package)"
+#USAGE arg "[pkgs]" var=#true help="packages to format (default: all)"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "pkgs=(${usage_pkgs:-})"
+if [ ${#pkgs[@]} -eq 0 ]; then pkgs=($(pkg_names)); fi
+
+for p in "${pkgs[@]}"; do
+  dir=$(pkg_dir "$p")
+  kind=$(pkg_kind "$p")
+  echo "==> $p ($kind)"
+  case "$kind" in
+    python)
+      (cd "$dir" && uv run ruff format && uv run ruff check --fix)
+      ;;
+    npm)
+      echo "$p: no formatter configured"
+      ;;
+    go)
+      # Generated code goes out gofmt-clean; only hand-written files are ever
+      # rewritten here.
+      files=$(find "$dir" -name '*.go' -not -path "$dir/internal/core/*")
+      [ -n "$files" ] && gofmt -w $files
+      ;;
+    cargo)
+      (cd "$dir" && cargo fmt)
+      ;;
+    hex)
+      (cd "$dir" && mix format)
+      ;;
+    gem)
+      (cd "$dir" && bundle exec standardrb --fix)
+      ;;
+    composer)
+      (cd "$dir" && vendor/bin/pint)
+      ;;
+  esac
+done

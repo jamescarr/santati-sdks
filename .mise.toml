@@ -1,0 +1,14 @@
+# Toolchain for santati-sdks. Tasks live in .mise/tasks/ (one file each);
+# CI runs the same tasks. Docker (core generation) and gh (releases) come from the host.
+#   mise tasks ls
+#   mise run check
+[tools]
+uv = "0.12.16"
+node = "24"
+go = "1.27.1"
+rust = "1.98.1"
+erlang = "29.1"
+elixir = "1.20.4-otp-29"
+ruby = "4.0.7"
+php = "8.5.11"
+actionlint = "1.7.12"

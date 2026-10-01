@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#MISE description="Every check release:tag runs before tagging: main, CHANGELOG, free tags, unpublished versions, secrets, PHP mirror"
+#USAGE arg "<pkgs>" var=#true help="packages about to be tagged"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "pkgs=($usage_pkgs)"
+
+pkg_guard_main
+secrets=$(gh secret list --json name --jq '.[].name')
+
+for p in "${pkgs[@]}"; do
+  dir=$(pkg_dir "$p")
+  kind=$(pkg_kind "$p")
+  v=$(pkg_version "$p")
+  tag=$(pkg_tag "$p" "$v")
+
+  pkg_has_heading "$p" "$v" || fail "$dir/CHANGELOG.md has no '## [$v]' heading; run release:prepare first"
+  if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then fail "tag $tag already exists locally"; fi
+  if git ls-remote --exit-code --tags origin "$tag" >/dev/null 2>&1; then fail "tag $tag already exists on origin"; fi
+
+  # The Go module proxy caches a 404 for a version that does not exist yet, so
+  # querying before the tag is pushed can poison the lookup: the free-tag check
+  # above is what covers Go.
+  if [ "$kind" != go ]; then
+    code=$(pkg_registry_code "$p" "$v")
+    [ "$code" = 404 ] || fail "$p $v is already published (HTTP $code); run release:prepare first"
+  fi
+
+  # The publish workflow cannot run without these, and finding out from a
+  # failed run after the tag exists is worse than finding out now.
+  for s in $(pkg_secrets "$p"); do
+    printf '%s\n' "$secrets" | grep -qx "$s" || fail "repo secret $s is not set"
+  done
+
+  # Packagist reads the mirror repo; without it the tag publishes nothing.
+  if [ "$kind" = composer ]; then
+    gh repo view "$PHP_MIRROR" >/dev/null 2>&1 ||
+      fail "mirror $PHP_MIRROR does not exist; see docs/releasing.md"
+  fi
+
+  printf '  %-12s %s -> %s\n' "$p" "$v" "$tag"
+done
