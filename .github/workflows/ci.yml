@@ -80,7 +80,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential autoconf bison re2c pkg-config libxml2-dev libssl-dev \
             libicu-dev libzip-dev libonig-dev libcurl4-openssl-dev libpng-dev libjpeg-dev libfreetype6-dev \
-            libwebp-dev libgmp-dev libsodium-dev libreadline-dev libbz2-dev
+            libwebp-dev libgmp-dev libsodium-dev libreadline-dev libbz2-dev libgd-dev
       - uses: jdx/mise-action@v5
         with:
           version: 2026.9.11
