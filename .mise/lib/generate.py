@@ -57,6 +57,22 @@ BATCH_ITEM_RESULT = {
 # generator referenced a non-existent `SantatiCore.Model.Uri` for `format: uri`.
 DROPPED_FORMATS = {"date-time", "date", "uri"}
 
+# Build output inside a generated tree (a test run's `__pycache__`, a build's
+# `target/`) is not drift: only the files generation itself produces matter.
+IGNORED_PARTS = {
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "node_modules",
+    "dist",
+    "target",
+    "_build",
+    "deps",
+    "vendor",
+}
+
 
 class Failure(SystemExit):
     def __init__(self, message: str) -> None:
@@ -278,24 +294,37 @@ def copy_outputs(core: str, generated: Path, out_root: Path) -> None:
             shutil.copyfile(source, target)
 
 
+def is_ignored(relative: Path) -> bool:
+    return any(part in IGNORED_PARTS for part in relative.parts)
+
+
+def relative_files(root: Path) -> dict[Path, Path]:
+    if root.is_file():
+        return {Path(root.name): root}
+    if not root.exists():
+        return {}
+    return {
+        path.relative_to(root): path
+        for path in sorted(root.rglob("*"))
+        if path.is_file() and not is_ignored(path.relative_to(root))
+    }
+
+
 def diff_paths(left: Path, right: Path) -> str:
-    if left.is_dir() or not left.exists():
-        report = []
-        for left_file in sorted(path for path in left.rglob("*") if path.is_file()) if left.exists() else []:
-            right_file = right / left_file.relative_to(left)
-            report.extend(diff_files(left_file, right_file))
-        for right_file in sorted(
-            (path for path in right.rglob("*") if path.is_file()) if right.exists() else []
-        ):
-            if not (left / right_file.relative_to(right)).exists():
-                report.append(f"only in generated: {right_file}")
-        return "".join(report)
-    return "".join(diff_files(left, right))
+    report = []
+    left_files = relative_files(left)
+    right_files = relative_files(right)
+    for name in sorted(set(left_files) | set(right_files)):
+        if name in left_files and name not in right_files:
+            report.append(f"only in repo: {left_files[name]}\n")
+        elif name in right_files and name not in left_files:
+            report.append(f"only in generated: {right_files[name]}\n")
+        else:
+            report.extend(diff_files(left_files[name], right_files[name]))
+    return "".join(report)
 
 
 def diff_files(left: Path, right: Path) -> list[str]:
-    if not right.exists():
-        return [f"only in repo: {left}"]
     if filecmp.cmp(left, right, shallow=False):
         return []
     name = left.name
