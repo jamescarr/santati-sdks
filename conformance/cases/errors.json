@@ -1,0 +1,616 @@
+{
+  "cases": [
+    {
+      "id": "errors.validation_envelope",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 400,
+          "body": {
+            "json": {
+              "error": {
+                "code": "unknown_field",
+                "message": "Unknown field 'colour'.",
+                "field": "colour"
+              }
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": 400,
+          "code": "unknown_field",
+          "field": "colour",
+          "retry_after": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.payload_too_large",
+      "feature": "errors.mapping",
+      "operation": "emit_batch",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 413,
+          "body": {
+            "json": {
+              "error": {
+                "code": "payload_too_large",
+                "message": "Request body exceeds 1048576 bytes.",
+                "field": null
+              }
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided"
+          }
+        ]
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": 413,
+          "code": "payload_too_large",
+          "field": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": {
+                    "$generated": "k"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.unprocessable",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 422,
+          "body": {
+            "json": {
+              "error": {
+                "code": "schema_validation_failed",
+                "message": "data.amount_cents must be an integer.",
+                "field": "data.amount_cents"
+              }
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": 422,
+          "code": "schema_validation_failed",
+          "field": "data.amount_cents"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.forbidden_detail",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 403,
+          "body": {
+            "json": {
+              "detail": "Authentication credentials were not provided."
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "AuthError",
+          "status": 403,
+          "code": null,
+          "field": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.trail_not_allowed",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 403,
+          "body": {
+            "json": {
+              "error": {
+                "code": "trail_not_allowed",
+                "message": "This API key is not scoped to trail 'billing'.",
+                "field": "trail"
+              }
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "AuthError",
+          "status": 403,
+          "code": "trail_not_allowed",
+          "field": "trail"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.unauthorized",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 401,
+          "body": {
+            "json": {
+              "detail": "Invalid API key."
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "AuthError",
+          "status": 401,
+          "code": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.list_invalid_cursor",
+      "feature": "errors.mapping",
+      "operation": "list",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 404,
+          "body": {
+            "json": {
+              "detail": "Invalid cursor"
+            }
+          }
+        },
+        "params": {
+          "cursor": "bogus"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "NotFoundError",
+          "status": 404,
+          "code": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?cursor=bogus",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.list_field_errors",
+      "feature": "errors.mapping",
+      "operation": "list",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 400,
+          "body": {
+            "json": {
+              "sort": [
+                "relevance requires q."
+              ]
+            }
+          }
+        },
+        "params": {
+          "sort": "relevance"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": 400,
+          "code": null,
+          "field": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?sort=relevance",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.rate_limited",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 429,
+          "headers": {
+            "retry-after": "30"
+          },
+          "body": {
+            "json": {
+              "error": {
+                "code": "rate_limited",
+                "message": "Rate limit exceeded: at most 600 requests per minute per team.",
+                "field": null
+              }
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "RateLimitedError",
+          "status": 429,
+          "code": "rate_limited",
+          "retry_after": 30
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.server_text_body",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "Internal Server Error"
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ServerError",
+          "status": 500,
+          "code": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.redirect_not_followed",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 302,
+          "headers": {
+            "location": "http://127.0.0.1:1/elsewhere"
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 302
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.conflict",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 409,
+          "body": {
+            "json": {
+              "detail": "Conflict."
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 409
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.undecodable_success",
+      "feature": "errors.mapping",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "body": {
+            "text": "not json"
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 201
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

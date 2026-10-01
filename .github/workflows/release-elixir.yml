@@ -1,0 +1,74 @@
+name: Release (Elixir)
+
+# Tag-driven Hex publish for elixir/ (the `santati` package). Tagged by
+# `mise run release:tag elixir`, so elixir-v0.1.0. Publishes the package and
+# its docs in one run, with HEX_API_KEY.
+
+on:
+  push:
+    tags:
+      - "elixir-v*"
+
+concurrency:
+  group: release-elixir-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    name: Resolve version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: resolve
+        env:
+          PKG: elixir
+        run: |
+          source .mise/lib/pkg.sh
+          [ "$(pkg_from_tag "$GITHUB_REF_NAME")" = "$PKG" ] || fail "$GITHUB_REF_NAME is not a $PKG tag"
+          VERSION=$(pkg_version_from_tag "$GITHUB_REF_NAME")
+          [ "$(pkg_version "$PKG")" = "$VERSION" ] ||
+            fail "tag $VERSION != $PKG manifest $(pkg_version "$PKG")"
+          pkg_has_heading "$PKG" "$VERSION" ||
+            fail "$PKG/CHANGELOG.md has no '## [$VERSION]' heading"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: Run full test suite
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to Hex + GitHub release
+    needs: [resolve, ci]
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: erlang,elixir
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.11
+          cache_key_prefix: mise-release-elixir
+      - run: mix local.hex --force && mix local.rebar --force
+
+      - name: mix hex.publish
+        working-directory: elixir
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: |
+          mix deps.get
+          mix hex.publish package --yes
+          mix hex.publish docs --yes
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          source .mise/lib/pkg.sh && pkg_notes elixir "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"

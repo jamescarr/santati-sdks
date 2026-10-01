@@ -1,0 +1,464 @@
+{
+  "cases": [
+    {
+      "id": "emit.generated_key",
+      "feature": "emit.idempotency",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "body": {
+            "json": {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "trail": "billing",
+              "event": "invoice.voided",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "received_at": "2026-09-29T14:03:11.913000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {}
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {}
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "currency": "usd"
+              },
+              "context": {},
+              "hash": "",
+              "schema_version": null
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "ok": {
+          "event": {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+            "trail": "billing",
+            "event": "invoice.voided",
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "received_at": "2026-09-29T14:03:11.913000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "user",
+              "id": "usr_123",
+              "name": "Dana Ortiz",
+              "metadata": {}
+            },
+            "targets": [
+              {
+                "type": "invoice",
+                "id": "inv_555",
+                "name": "INV-555",
+                "metadata": {}
+              }
+            ],
+            "metadata": {
+              "plan": "pro"
+            },
+            "data": {
+              "amount_cents": 4200,
+              "currency": "usd"
+            },
+            "context": {},
+            "hash": "",
+            "schema_version": null
+          },
+          "duplicate": false,
+          "idempotency_key": {
+            "$generated": "k"
+          }
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "emit.full_envelope",
+      "feature": "emit.envelope",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "body": {
+            "json": {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "trail": "billing",
+              "event": "invoice.voided",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "received_at": "2026-09-29T14:03:11.913000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {}
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {}
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "currency": "usd"
+              },
+              "context": {},
+              "hash": "",
+              "schema_version": null
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided",
+          "trail": "security",
+          "organization_id": "org_acme",
+          "actor": {
+            "type": "user",
+            "id": "usr_123",
+            "name": "Dana Ortiz",
+            "metadata": {
+              "role": "admin"
+            }
+          },
+          "targets": [
+            {
+              "type": "invoice",
+              "id": "inv_555",
+              "name": "INV-555",
+              "metadata": {
+                "region": "us"
+              }
+            }
+          ],
+          "metadata": {
+            "plan": "pro"
+          },
+          "data": {
+            "amount_cents": 4200,
+            "tags": [
+              "refund"
+            ],
+            "void": true
+          },
+          "context": {
+            "ip": "203.0.113.9"
+          },
+          "created_at": "2026-09-29T14:03:11.482+00:00",
+          "idempotency_key": "evt-0001"
+        }
+      },
+      "expect": {
+        "ok": {
+          "event": {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+            "trail": "billing",
+            "event": "invoice.voided",
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "received_at": "2026-09-29T14:03:11.913000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "user",
+              "id": "usr_123",
+              "name": "Dana Ortiz",
+              "metadata": {}
+            },
+            "targets": [
+              {
+                "type": "invoice",
+                "id": "inv_555",
+                "name": "INV-555",
+                "metadata": {}
+              }
+            ],
+            "metadata": {
+              "plan": "pro"
+            },
+            "data": {
+              "amount_cents": 4200,
+              "currency": "usd"
+            },
+            "context": {},
+            "hash": "",
+            "schema_version": null
+          },
+          "duplicate": false,
+          "idempotency_key": "evt-0001"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "security",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {
+                  "role": "admin"
+                }
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {
+                    "region": "us"
+                  }
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "tags": [
+                  "refund"
+                ],
+                "void": true
+              },
+              "context": {
+                "ip": "203.0.113.9"
+              },
+              "created_at": "2026-09-29T14:03:11.482+00:00",
+              "idempotency_key": "evt-0001"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "emit.duplicate",
+      "feature": "emit.result",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB",
+              "trail": "billing",
+              "event": "invoice.paid",
+              "created_at": "2026-09-29T15:00:00.000000Z",
+              "received_at": "2026-09-29T15:00:00.120000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "system",
+                "id": "billing-worker",
+                "name": "",
+                "metadata": {}
+              },
+              "targets": [],
+              "metadata": {},
+              "data": {
+                "amount_cents": 4200
+              },
+              "context": {
+                "request_id": "req_1"
+              },
+              "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+              "schema_version": 3
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.paid",
+          "idempotency_key": "evt-0002"
+        }
+      },
+      "expect": {
+        "ok": {
+          "event": {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB",
+            "trail": "billing",
+            "event": "invoice.paid",
+            "created_at": "2026-09-29T15:00:00.000000Z",
+            "received_at": "2026-09-29T15:00:00.120000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "system",
+              "id": "billing-worker",
+              "name": "",
+              "metadata": {}
+            },
+            "targets": [],
+            "metadata": {},
+            "data": {
+              "amount_cents": 4200
+            },
+            "context": {
+              "request_id": "req_1"
+            },
+            "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+            "schema_version": 3
+          },
+          "duplicate": true,
+          "idempotency_key": "evt-0002"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.paid",
+              "trail": "billing",
+              "idempotency_key": "evt-0002"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "emit.unexpected_status",
+      "feature": "emit.result",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 204
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 204
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "emit.missing_trail",
+      "feature": "emit.validation",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "boom"
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": null,
+          "code": null,
+          "field": "trail"
+        },
+        "requests": []
+      }
+    },
+    {
+      "id": "emit.empty_event",
+      "feature": "emit.validation",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "boom"
+          }
+        },
+        "event": {
+          "event": ""
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": null,
+          "field": "event"
+        },
+        "requests": []
+      }
+    }
+  ]
+}

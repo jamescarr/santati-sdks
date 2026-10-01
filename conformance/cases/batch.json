@@ -1,0 +1,245 @@
+{
+  "cases": [
+    {
+      "id": "batch.accepted",
+      "feature": "batch.request",
+      "operation": "emit_batch",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 202,
+          "body": {
+            "json": {
+              "accepted": 2,
+              "rejected": 0,
+              "results": [
+                {
+                  "index": 0,
+                  "status": "accepted",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+                },
+                {
+                  "index": 1,
+                  "status": "duplicate",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB"
+                }
+              ]
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-1"
+          },
+          {
+            "event": "invoice.paid",
+            "trail": "payments"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "accepted": 2,
+          "rejected": 0,
+          "results": [
+            {
+              "index": 0,
+              "status": "accepted",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+            },
+            {
+              "index": 1,
+              "status": "duplicate",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB"
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-1"
+                },
+                {
+                  "event": "invoice.paid",
+                  "trail": "payments",
+                  "idempotency_key": {
+                    "$generated": "k2"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "batch.partial",
+      "feature": "batch.result",
+      "operation": "emit_batch",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 207,
+          "body": {
+            "json": {
+              "accepted": 1,
+              "rejected": 1,
+              "results": [
+                {
+                  "index": 0,
+                  "status": "accepted",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+                },
+                {
+                  "index": 1,
+                  "status": "rejected",
+                  "error": {
+                    "code": "unknown_action",
+                    "message": "Action 'invoice.deleted' is not defined for this team.",
+                    "field": "event"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided"
+          },
+          {
+            "event": "invoice.deleted"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "accepted": 1,
+          "rejected": 1,
+          "results": [
+            {
+              "index": 0,
+              "status": "accepted",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+            },
+            {
+              "index": 1,
+              "status": "rejected",
+              "error": {
+                "code": "unknown_action",
+                "message": "Action 'invoice.deleted' is not defined for this team.",
+                "field": "event"
+              }
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": {
+                    "$generated": "k1"
+                  }
+                },
+                {
+                  "event": "invoice.deleted",
+                  "trail": "billing",
+                  "idempotency_key": {
+                    "$generated": "k2"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "batch.empty",
+      "feature": "batch.request",
+      "operation": "emit_batch",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "boom"
+          }
+        },
+        "events": []
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": null,
+          "field": "events"
+        },
+        "requests": []
+      }
+    },
+    {
+      "id": "batch.item_missing_trail",
+      "feature": "batch.request",
+      "operation": "emit_batch",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "boom"
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "trail": "billing"
+          },
+          {
+            "event": "invoice.paid"
+          }
+        ]
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": null,
+          "field": "events[1].trail"
+        },
+        "requests": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+name: Release (Python)
+
+# Tag-driven PyPI publish for python/ (the `santati` package on PyPI). Tagged
+# by `mise run release:tag python`; the tag name is the directory name, so
+# python-v0.1.0, and release:prepare/release:preflight validate it first.
+#
+# Publishes via PyPI Trusted Publishing (OIDC): no long-lived token secret.
+# One-time setup on pypi.org: until the `santati` project exists there is no
+# project settings page to use, so register a *pending* trusted publisher under
+# Account -> Publishing (pypi.org/manage/account/publishing/) with Project Name
+# `santati`, Owner `jamescarr`, Repository `santati-sdks`, Workflow
+# `release-python.yml`, Environment `pypi`. The first successful run creates
+# and binds the project. See docs/releasing.md.
+
+on:
+  push:
+    tags:
+      - "python-v*"
+
+concurrency:
+  group: release-python-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    name: Resolve version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: resolve
+        env:
+          PKG: python
+        run: |
+          source .mise/lib/pkg.sh
+          [ "$(pkg_from_tag "$GITHUB_REF_NAME")" = "$PKG" ] || fail "$GITHUB_REF_NAME is not a $PKG tag"
+          VERSION=$(pkg_version_from_tag "$GITHUB_REF_NAME")
+          [ "$(pkg_version "$PKG")" = "$VERSION" ] ||
+            fail "tag $VERSION != $PKG manifest $(pkg_version "$PKG")"
+          pkg_has_heading "$PKG" "$VERSION" ||
+            fail "$PKG/CHANGELOG.md has no '## [$VERSION]' heading"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: Run full test suite
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to PyPI + GitHub release
+    needs: [resolve, ci]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Job-level permissions replace the workflow's rather than extending
+      # them, so `contents: write` has to be repeated here or `gh release
+      # create` below gets a 403.
+      contents: write
+      id-token: write # PyPI Trusted Publishing
+    steps:
+      - uses: actions/checkout@v7
+      # Pinned to .mise.toml's uv, the one `mise run check:package python`
+      # built and tested with.
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.12.16"
+
+      - name: uv build
+        working-directory: python
+        run: uv build
+
+      - name: Publish package
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          source .mise/lib/pkg.sh && pkg_notes python "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"

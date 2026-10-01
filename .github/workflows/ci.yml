@@ -1,0 +1,87 @@
+name: CI
+
+# Every job runs the same `mise run` task you run locally, with the toolchain
+# pinned in .mise.toml. The package matrix is discovered from the package
+# directories themselves, so a new package needs no edit here; MISE_ENABLE_TOOLS
+# keeps each job to the tools its package actually needs.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+jobs:
+  discover:
+    name: discover packages
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.discover.outputs.packages }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: discover
+        run: source .mise/lib/pkg.sh && echo "packages=$(pkg_json)" >> "$GITHUB_OUTPUT"
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: actionlint
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.11
+          cache_key_prefix: mise-lint
+      - run: mise run lint:workflows
+
+  drift:
+    name: generated code is current
+    runs-on: ubuntu-latest
+    env:
+      MISE_ENABLE_TOOLS: uv
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.11
+          cache_key_prefix: mise-drift
+      # ubuntu-latest has Docker, which is all the generators need.
+      - run: mise run check:drift
+
+  package:
+    name: ${{ matrix.package }}
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    steps:
+      - uses: actions/checkout@v7
+      # The matrix value reaches the source through the environment, never
+      # through expression interpolation into a shell command.
+      - name: enable this package's tools
+        env:
+          PKG: ${{ matrix.package }}
+        run: echo "MISE_ENABLE_TOOLS=$(source .mise/lib/pkg.sh && pkg_tools "$PKG")" >> "$GITHUB_ENV"
+      - name: install PHP build dependencies
+        if: matrix.package == 'php'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential autoconf bison re2c pkg-config libxml2-dev libssl-dev \
+            libicu-dev libzip-dev libonig-dev libcurl4-openssl-dev libpng-dev libjpeg-dev libfreetype6-dev \
+            libwebp-dev libgmp-dev libsodium-dev libreadline-dev libbz2-dev
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.11
+          cache_key_prefix: mise-${{ matrix.package }}
+      - name: install Hex and rebar
+        if: matrix.package == 'elixir'
+        run: mix local.hex --force && mix local.rebar --force
+      - name: check
+        env:
+          PKG: ${{ matrix.package }}
+        run: |
+          mise run check:package "$PKG"
+          mise run check:conformance "$PKG"

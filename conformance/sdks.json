@@ -1,0 +1,9 @@
+{"sdks": {
+  "python":     {"setup": [["uv", "sync", "--locked"]],                                          "run": ["uv", "run", "pytest", "tests/test_conformance.py"]},
+  "typescript": {"setup": [["npm", "ci"]],                                                       "run": ["npm", "run", "conformance"]},
+  "go":         {"setup": [],                                                                     "run": ["go", "test", "-run", "TestConformance", "./..."]},
+  "rust":       {"setup": [],                                                                     "run": ["cargo", "test", "--locked", "--test", "conformance"]},
+  "elixir":     {"setup": [["mix", "deps.get"]],                                                  "run": ["mix", "test", "test/conformance_test.exs"]},
+  "ruby":       {"setup": [["bundle", "install"]],                                                "run": ["bundle", "exec", "ruby", "-Ilib", "-Itest", "test/conformance_test.rb"]},
+  "php":        {"setup": [["composer", "install", "--no-interaction", "--no-progress"]],         "run": ["vendor/bin/phpunit", "tests/ConformanceTest.php"]}
+}}

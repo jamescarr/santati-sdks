@@ -1,0 +1,766 @@
+{
+  "cases": [
+    {
+      "id": "list.no_params",
+      "feature": "list.query",
+      "operation": "list",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+                  "trail": "billing",
+                  "event": "invoice.voided",
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "received_at": "2026-09-29T14:03:11.913000Z",
+                  "organization_id": "org_acme",
+                  "actor": {
+                    "type": "user",
+                    "id": "usr_123",
+                    "name": "Dana Ortiz",
+                    "metadata": {}
+                  },
+                  "targets": [
+                    {
+                      "type": "invoice",
+                      "id": "inv_555",
+                      "name": "INV-555",
+                      "metadata": {}
+                    }
+                  ],
+                  "metadata": {
+                    "plan": "pro"
+                  },
+                  "data": {
+                    "amount_cents": 4200,
+                    "currency": "usd"
+                  },
+                  "context": {},
+                  "hash": "",
+                  "schema_version": null
+                }
+              ]
+            }
+          }
+        },
+        "params": {}
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "trail": "billing",
+              "event": "invoice.voided",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "received_at": "2026-09-29T14:03:11.913000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {}
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {}
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "currency": "usd"
+              },
+              "context": {},
+              "hash": "",
+              "schema_version": null
+            }
+          ],
+          "next_cursor": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "list.filters",
+      "feature": "list.query",
+      "operation": "list",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": "https://api.santati.io/api/v0/events/?created_after=2026-09-01T00%3A00%3A00%2B00%3A00&cursor=cD00ODY%3D&event=invoice.voided&limit=2&organization_id=org_acme&trail=billing",
+              "previous": null,
+              "results": [
+                {
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+                  "trail": "billing",
+                  "event": "invoice.voided",
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "received_at": "2026-09-29T14:03:11.913000Z",
+                  "organization_id": "org_acme",
+                  "actor": {
+                    "type": "user",
+                    "id": "usr_123",
+                    "name": "Dana Ortiz",
+                    "metadata": {}
+                  },
+                  "targets": [
+                    {
+                      "type": "invoice",
+                      "id": "inv_555",
+                      "name": "INV-555",
+                      "metadata": {}
+                    }
+                  ],
+                  "metadata": {
+                    "plan": "pro"
+                  },
+                  "data": {
+                    "amount_cents": 4200,
+                    "currency": "usd"
+                  },
+                  "context": {},
+                  "hash": "",
+                  "schema_version": null
+                },
+                {
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB",
+                  "trail": "billing",
+                  "event": "invoice.paid",
+                  "created_at": "2026-09-29T15:00:00.000000Z",
+                  "received_at": "2026-09-29T15:00:00.120000Z",
+                  "organization_id": "org_acme",
+                  "actor": {
+                    "type": "system",
+                    "id": "billing-worker",
+                    "name": "",
+                    "metadata": {}
+                  },
+                  "targets": [],
+                  "metadata": {},
+                  "data": {
+                    "amount_cents": 4200
+                  },
+                  "context": {
+                    "request_id": "req_1"
+                  },
+                  "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+                  "schema_version": 3
+                }
+              ]
+            }
+          }
+        },
+        "params": {
+          "trail": "billing",
+          "event": "invoice.voided",
+          "organization_id": "org_acme",
+          "created_after": "2026-09-01T00:00:00+00:00",
+          "limit": 2
+        }
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "trail": "billing",
+              "event": "invoice.voided",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "received_at": "2026-09-29T14:03:11.913000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {}
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {}
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "currency": "usd"
+              },
+              "context": {},
+              "hash": "",
+              "schema_version": null
+            },
+            {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB",
+              "trail": "billing",
+              "event": "invoice.paid",
+              "created_at": "2026-09-29T15:00:00.000000Z",
+              "received_at": "2026-09-29T15:00:00.120000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "system",
+                "id": "billing-worker",
+                "name": "",
+                "metadata": {}
+              },
+              "targets": [],
+              "metadata": {},
+              "data": {
+                "amount_cents": 4200
+              },
+              "context": {
+                "request_id": "req_1"
+              },
+              "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+              "schema_version": 3
+            }
+          ],
+          "next_cursor": "cD00ODY="
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?created_after=2026-09-01T00%3A00%3A00%2B00%3A00&event=invoice.voided&limit=2&organization_id=org_acme&trail=billing",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "list.all_params",
+      "feature": "list.query",
+      "operation": "list",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": null,
+              "previous": "https://api.santati.io/api/v0/events/?cursor=cj0xJnA9NDg3",
+              "results": []
+            }
+          }
+        },
+        "params": {
+          "actor_id": "usr_123",
+          "actor_type": "user",
+          "created_after": "2026-09-01",
+          "created_before": "2026-09-30",
+          "cursor": "cD00ODY=",
+          "event": "invoice.voided",
+          "event_prefix": "invoice.",
+          "limit": 50,
+          "organization_id": "org_acme",
+          "q": "dana",
+          "sort": "relevance",
+          "target_id": "inv_555",
+          "target_type": "invoice",
+          "trail": "billing"
+        }
+      },
+      "expect": {
+        "ok": {
+          "results": [],
+          "next_cursor": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?actor_id=usr_123&actor_type=user&created_after=2026-09-01&created_before=2026-09-30&cursor=cD00ODY%3D&event=invoice.voided&event_prefix=invoice.&limit=50&organization_id=org_acme&q=dana&sort=relevance&target_id=inv_555&target_type=invoice&trail=billing",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "list.next_without_cursor",
+      "feature": "list.page",
+      "operation": "list",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": "https://api.santati.io/api/v0/events/?page=2",
+              "previous": null,
+              "results": [
+                {
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+                  "trail": "billing",
+                  "event": "invoice.voided",
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "received_at": "2026-09-29T14:03:11.913000Z",
+                  "organization_id": "org_acme",
+                  "actor": {
+                    "type": "user",
+                    "id": "usr_123",
+                    "name": "Dana Ortiz",
+                    "metadata": {}
+                  },
+                  "targets": [
+                    {
+                      "type": "invoice",
+                      "id": "inv_555",
+                      "name": "INV-555",
+                      "metadata": {}
+                    }
+                  ],
+                  "metadata": {
+                    "plan": "pro"
+                  },
+                  "data": {
+                    "amount_cents": 4200,
+                    "currency": "usd"
+                  },
+                  "context": {},
+                  "hash": "",
+                  "schema_version": null
+                }
+              ]
+            }
+          }
+        },
+        "params": {}
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "trail": "billing",
+              "event": "invoice.voided",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "received_at": "2026-09-29T14:03:11.913000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {}
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {}
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "currency": "usd"
+              },
+              "context": {},
+              "hash": "",
+              "schema_version": null
+            }
+          ],
+          "next_cursor": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "iterate.pages",
+      "feature": "list.iterate",
+      "operation": "iterate",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "sequence": [
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": "https://api.santati.io/api/v0/events/?cursor=cD00ODY%3D&limit=2&trail=billing",
+                  "previous": null,
+                  "results": [
+                    {
+                      "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+                      "trail": "billing",
+                      "event": "invoice.voided",
+                      "created_at": "2026-09-29T14:03:11.482000Z",
+                      "received_at": "2026-09-29T14:03:11.913000Z",
+                      "organization_id": "org_acme",
+                      "actor": {
+                        "type": "user",
+                        "id": "usr_123",
+                        "name": "Dana Ortiz",
+                        "metadata": {}
+                      },
+                      "targets": [
+                        {
+                          "type": "invoice",
+                          "id": "inv_555",
+                          "name": "INV-555",
+                          "metadata": {}
+                        }
+                      ],
+                      "metadata": {
+                        "plan": "pro"
+                      },
+                      "data": {
+                        "amount_cents": 4200,
+                        "currency": "usd"
+                      },
+                      "context": {},
+                      "hash": "",
+                      "schema_version": null
+                    },
+                    {
+                      "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB",
+                      "trail": "billing",
+                      "event": "invoice.paid",
+                      "created_at": "2026-09-29T15:00:00.000000Z",
+                      "received_at": "2026-09-29T15:00:00.120000Z",
+                      "organization_id": "org_acme",
+                      "actor": {
+                        "type": "system",
+                        "id": "billing-worker",
+                        "name": "",
+                        "metadata": {}
+                      },
+                      "targets": [],
+                      "metadata": {},
+                      "data": {
+                        "amount_cents": 4200
+                      },
+                      "context": {
+                        "request_id": "req_1"
+                      },
+                      "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+                      "schema_version": 3
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": null,
+                  "previous": "https://api.santati.io/api/v0/events/?cursor=cj0xJnA9NDg3&limit=2&trail=billing",
+                  "results": [
+                    {
+                      "id": "01J9Z6K3M4QX8RT2VN5B7HCWDC",
+                      "trail": "billing",
+                      "event": "invoice.created",
+                      "created_at": "2026-09-28T09:30:00.000000Z",
+                      "received_at": "2026-09-28T09:30:00.050000Z",
+                      "organization_id": "org_acme",
+                      "actor": {
+                        "type": "anonymous",
+                        "id": "",
+                        "name": "",
+                        "metadata": {}
+                      },
+                      "targets": [],
+                      "metadata": {},
+                      "data": {
+                        "lines": [
+                          1,
+                          2
+                        ]
+                      },
+                      "context": {},
+                      "hash": "",
+                      "schema_version": 1
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "params": {
+          "trail": "billing",
+          "limit": 2
+        }
+      },
+      "expect": {
+        "ok": [
+          {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+            "trail": "billing",
+            "event": "invoice.voided",
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "received_at": "2026-09-29T14:03:11.913000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "user",
+              "id": "usr_123",
+              "name": "Dana Ortiz",
+              "metadata": {}
+            },
+            "targets": [
+              {
+                "type": "invoice",
+                "id": "inv_555",
+                "name": "INV-555",
+                "metadata": {}
+              }
+            ],
+            "metadata": {
+              "plan": "pro"
+            },
+            "data": {
+              "amount_cents": 4200,
+              "currency": "usd"
+            },
+            "context": {},
+            "hash": "",
+            "schema_version": null
+          },
+          {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB",
+            "trail": "billing",
+            "event": "invoice.paid",
+            "created_at": "2026-09-29T15:00:00.000000Z",
+            "received_at": "2026-09-29T15:00:00.120000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "system",
+              "id": "billing-worker",
+              "name": "",
+              "metadata": {}
+            },
+            "targets": [],
+            "metadata": {},
+            "data": {
+              "amount_cents": 4200
+            },
+            "context": {
+              "request_id": "req_1"
+            },
+            "hash": "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+            "schema_version": 3
+          },
+          {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDC",
+            "trail": "billing",
+            "event": "invoice.created",
+            "created_at": "2026-09-28T09:30:00.000000Z",
+            "received_at": "2026-09-28T09:30:00.050000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "anonymous",
+              "id": "",
+              "name": "",
+              "metadata": {}
+            },
+            "targets": [],
+            "metadata": {},
+            "data": {
+              "lines": [
+                1,
+                2
+              ]
+            },
+            "context": {},
+            "hash": "",
+            "schema_version": 1
+          }
+        ],
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?limit=2&trail=billing",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?cursor=cD00ODY%3D&limit=2&trail=billing",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "iterate.empty",
+      "feature": "list.iterate",
+      "operation": "iterate",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": null,
+              "previous": null,
+              "results": []
+            }
+          }
+        },
+        "params": {}
+      },
+      "expect": {
+        "ok": [],
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "iterate.error_on_second_page",
+      "feature": "list.iterate",
+      "operation": "iterate",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "sequence": [
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": "https://api.santati.io/api/v0/events/?cursor=cD00ODY%3D&trail=billing",
+                  "previous": null,
+                  "results": [
+                    {
+                      "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+                      "trail": "billing",
+                      "event": "invoice.voided",
+                      "created_at": "2026-09-29T14:03:11.482000Z",
+                      "received_at": "2026-09-29T14:03:11.913000Z",
+                      "organization_id": "org_acme",
+                      "actor": {
+                        "type": "user",
+                        "id": "usr_123",
+                        "name": "Dana Ortiz",
+                        "metadata": {}
+                      },
+                      "targets": [
+                        {
+                          "type": "invoice",
+                          "id": "inv_555",
+                          "name": "INV-555",
+                          "metadata": {}
+                        }
+                      ],
+                      "metadata": {
+                        "plan": "pro"
+                      },
+                      "data": {
+                        "amount_cents": 4200,
+                        "currency": "usd"
+                      },
+                      "context": {},
+                      "hash": "",
+                      "schema_version": null
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "status": 500,
+              "body": {
+                "text": "boom"
+              }
+            }
+          ]
+        },
+        "params": {
+          "trail": "billing"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ServerError",
+          "status": 500,
+          "code": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?trail=billing",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/api/v0/events/?cursor=cD00ODY%3D&trail=billing",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

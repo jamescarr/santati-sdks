@@ -1,0 +1,79 @@
+name: Release (Ruby)
+
+# Tag-driven RubyGems publish for ruby/ (the `santati` gem). Tagged by
+# `mise run release:tag ruby`, so ruby-v0.1.0.
+#
+# RubyGems Trusted Publishing (OIDC): no long-lived token secret. One-time
+# setup on rubygems.org: gem -> Trusted publishers -> GitHub, with Repository
+# `jamescarr/santati-sdks`, Workflow `release-ruby.yml`. See docs/releasing.md.
+
+on:
+  push:
+    tags:
+      - "ruby-v*"
+
+concurrency:
+  group: release-ruby-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    name: Resolve version from tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: resolve
+        env:
+          PKG: ruby
+        run: |
+          source .mise/lib/pkg.sh
+          [ "$(pkg_from_tag "$GITHUB_REF_NAME")" = "$PKG" ] || fail "$GITHUB_REF_NAME is not a $PKG tag"
+          VERSION=$(pkg_version_from_tag "$GITHUB_REF_NAME")
+          [ "$(pkg_version "$PKG")" = "$VERSION" ] ||
+            fail "tag $VERSION != $PKG manifest $(pkg_version "$PKG")"
+          pkg_has_heading "$PKG" "$VERSION" ||
+            fail "$PKG/CHANGELOG.md has no '## [$VERSION]' heading"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: Run full test suite
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to RubyGems + GitHub release
+    needs: [resolve, ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # RubyGems Trusted Publishing
+    env:
+      MISE_ENABLE_TOOLS: ruby
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.11
+          cache_key_prefix: mise-release-ruby
+      - uses: rubygems/configure-rubygems-credentials@v2
+
+      - name: gem build and push
+        working-directory: ruby
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          gem build santati.gemspec
+          gem push "santati-$VERSION.gem"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          source .mise/lib/pkg.sh && pkg_notes ruby "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"

@@ -1,0 +1,56 @@
+name: Spec sync
+
+# Weekly (and on demand) re-vendor of the control plane's public spec plus a
+# regeneration. Opens a PR only when something actually changed. The checkout
+# uses a PAT rather than github.token so the pushed branch triggers CI.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: branch, tag or sha of jamescarr/santati-control-plane
+        default: main
+
+jobs:
+  sync:
+    name: sync + generate
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.SPEC_SYNC_TOKEN }}
+      MISE_ENABLE_TOOLS: uv
+      REF: ${{ inputs.ref || 'main' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.SPEC_SYNC_TOKEN }}
+      - uses: jdx/mise-action@v5
+        with:
+          version: 2026.9.11
+          cache_key_prefix: mise-spec-sync
+      - run: mise run spec:sync "$REF"
+      - run: mise run generate
+      - name: open or update the sync PR
+        run: |
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "spec unchanged"
+            exit 0
+          fi
+          version=$(cat spec/SPEC_VERSION)
+          branch="chore/spec-sync-$version"
+          git config user.name "santati-spec-sync"
+          git config user.email "release@users.noreply.github.com"
+          git switch -c "$branch"
+          git add -A
+          git commit -q -m "chore(spec): sync santati-v0.yaml to $version"
+          git push --force origin "$branch"
+          if gh pr view "$branch" >/dev/null 2>&1; then
+            echo "PR for $branch is already open"
+          else
+            gh pr create --base main --head "$branch" \
+              --title "chore(spec): sync santati-v0.yaml to $version" \
+              --body "Re-vendors \`docs/openapi/v0.yaml\` from jamescarr/santati-control-plane at \`$REF\` (\`$version\`) and regenerates every core.
+
+          Review the profile diff (\`git diff spec/santati-v0.sdk.yaml\`) and the generated trees; facades that need a new field or parameter must be updated per \`docs/sdk-surface.md\` with vectors in \`conformance/\` for all seven SDKs."
+          fi
