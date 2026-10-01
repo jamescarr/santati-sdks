@@ -8,5 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Framework integrations under `santati.integrations`, each behind an extra:
+  Django auth signals (`santati[django]`), LangChain/LangGraph tool calls
+  (`santati[langchain]`), OpenAI Agents SDK tool calls
+  (`santati[openai-agents]`), Pydantic AI tool executions
+  (`santati[pydantic-ai]`) and Claude Agent SDK tool calls
+  (`santati[claude-agent-sdk]`). Each sends events inline through `client` or
+  hands them to a `dispatch` callable, and never raises into the framework.
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
