@@ -10,7 +10,10 @@ TypeScript, exported struct fields for Go.
 
 Scope boundary: no background batching/flush, no async variants of the
 sync-language clients, no `metadata.<key>` read filters (the spec cannot
-express a templated query parameter).
+express a templated query parameter). Language-specific framework
+integrations (Python's `santati.integrations`, behind extras) build envelopes
+and call the public `emit`; they add no wire behaviour, are outside this
+surface and `conformance/`, and need no counterpart in other SDKs.
 
 ## Client options
 
