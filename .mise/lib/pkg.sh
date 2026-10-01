@@ -240,7 +240,10 @@ pkg_tools() {
     cargo) echo rust,node ;;
     hex) echo erlang,elixir,node ;;
     gem) echo ruby,node ;;
-    composer) echo php,composer,node ;;
+    # `http:composer` is the http backend's name for the composer phar: the
+    # bare `composer` is not in mise's registry, so `mise install composer`
+    # fails.
+    composer) echo php,http:composer,node ;;
   esac
 }
 

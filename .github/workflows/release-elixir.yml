@@ -46,14 +46,13 @@ jobs:
     name: Publish to Hex + GitHub release
     needs: [resolve, ci]
     runs-on: ubuntu-latest
-    env:
-      MISE_ENABLE_TOOLS: erlang,elixir
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
         with:
           version: 2026.9.11
           cache_key_prefix: mise-release-elixir
+          install_args: erlang elixir
       - run: mix local.hex --force && mix local.rebar --force
 
       - name: mix hex.publish

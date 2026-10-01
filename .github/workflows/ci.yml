@@ -2,8 +2,10 @@ name: CI
 
 # Every job runs the same `mise run` task you run locally, with the toolchain
 # pinned in .mise.toml. The package matrix is discovered from the package
-# directories themselves, so a new package needs no edit here; MISE_ENABLE_TOOLS
-# keeps each job to the tools its package actually needs.
+# directories themselves, so a new package needs no edit here. Each job
+# installs only the tools its package needs (`install_args` from `pkg_tools`)
+# and disables task auto-install, so nothing drags the source-built PHP
+# toolchain into a package that does not need it.
 
 on:
   push:
@@ -26,26 +28,28 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     env:
-      MISE_ENABLE_TOOLS: actionlint
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
         with:
           version: 2026.9.11
           cache_key_prefix: mise-lint
+          install_args: actionlint
       - run: mise run lint:workflows
 
   drift:
     name: generated code is current
     runs-on: ubuntu-latest
     env:
-      MISE_ENABLE_TOOLS: uv
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5
         with:
           version: 2026.9.11
           cache_key_prefix: mise-drift
+          install_args: uv
       # ubuntu-latest has Docker, which is all the generators need.
       - run: mise run check:drift
 
@@ -57,14 +61,19 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    env:
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
     steps:
       - uses: actions/checkout@v7
       # The matrix value reaches the source through the environment, never
       # through expression interpolation into a shell command.
-      - name: enable this package's tools
+      - name: resolve this package's toolchain
+        id: tools
         env:
           PKG: ${{ matrix.package }}
-        run: echo "MISE_ENABLE_TOOLS=$(source .mise/lib/pkg.sh && pkg_tools "$PKG")" >> "$GITHUB_ENV"
+        run: |
+          tools=$(source .mise/lib/pkg.sh && pkg_tools "$PKG")
+          echo "args=${tools//,/ }" >> "$GITHUB_OUTPUT"
       - name: install PHP build dependencies
         if: matrix.package == 'php'
         run: |
@@ -76,6 +85,7 @@ jobs:
         with:
           version: 2026.9.11
           cache_key_prefix: mise-${{ matrix.package }}
+          install_args: ${{ steps.tools.outputs.args }}
       - name: install Hex and rebar
         if: matrix.package == 'elixir'
         run: mix local.hex --force && mix local.rebar --force

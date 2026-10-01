@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.SPEC_SYNC_TOKEN }}
-      MISE_ENABLE_TOOLS: uv
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
       REF: ${{ inputs.ref || 'main' }}
     steps:
       - uses: actions/checkout@v7
@@ -29,6 +29,7 @@ jobs:
         with:
           version: 2026.9.11
           cache_key_prefix: mise-spec-sync
+          install_args: uv
       - run: mise run spec:sync "$REF"
       - run: mise run generate
       - name: open or update the sync PR
