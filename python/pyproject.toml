@@ -37,6 +37,7 @@ dev = [
   "pydantic-ai-slim>=2.52",
   "claude-agent-sdk>=0.1.46",
   "anyio>=4",
+  "langgraph>=1",
 ]
 
 [build-system]

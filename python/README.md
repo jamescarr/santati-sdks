@@ -112,7 +112,9 @@ Per framework:
   repeated call replaces the previous instrumentation.
 - **LangChain / LangGraph** — `SantatiCallbackHandler` audits `ToolNode`,
   `create_agent` and bare `tool.invoke` calls. It runs in an executor thread
-  during async runs, so emits never stall the event loop.
+  during async runs, so emits never stall the event loop. A call LangGraph
+  pauses with `interrupt()` produces no event; the resumed run audits the call
+  that actually executes.
 - **OpenAI Agents SDK** — `SantatiRunHooks` audits local tool calls.
   Failures are opt-in: the SDK's default formatter turns a tool exception into
   a result nothing can observe, so a failing tool is recorded as succeeded

@@ -49,7 +49,9 @@ class SantatiCallbackHandler(BaseCallbackHandler):
     A tool that returns sends ``agent.tool_call.succeeded``; one that raises
     sends ``agent.tool_call.failed``. A tool whose error ``handle_tool_error``
     turned into a result also counts as failed — LangChain reports it as an
-    error ``ToolMessage`` and never calls ``on_tool_error``.
+    error ``ToolMessage`` and never calls ``on_tool_error``. A call LangGraph
+    pauses with ``interrupt()`` produces no event: the pause is control flow,
+    and the resumed run audits the call that actually executes.
 
     Tool callbacks carry no agent name, so the actor is the configured one or
     ``{"type": "system", "id": "langchain"}``.
@@ -113,9 +115,13 @@ class SantatiCallbackHandler(BaseCallbackHandler):
     def on_tool_error(
         self, error: BaseException, *, run_id: UUID, parent_run_id: UUID | None = None, **kwargs: Any
     ) -> None:
-        """Audit a call whose exception escaped the tool."""
+        """Audit a call whose exception escaped the tool, except LangGraph's control flow."""
         pending = self._pop(run_id)
         if pending is None:
+            return
+        if isinstance(error, _bubble_up_types()):
+            # An interruption signal, not a failure: `interrupt()` pauses the run
+            # for approval, and the resumed run executes the tool again.
             return
         self._record(pending, error=error)
 
@@ -137,3 +143,23 @@ class SantatiCallbackHandler(BaseCallbackHandler):
 def _text(value: Any) -> str | None:
     """``value`` when it is a non-empty string, else ``None``."""
     return value if isinstance(value, str) and value else None
+
+
+_BUBBLE_UP: tuple[type[BaseException], ...] | None = None
+
+
+def _bubble_up_types() -> tuple[type[BaseException], ...]:
+    """LangGraph's control-flow exceptions, resolved on first use.
+
+    ``langgraph`` is optional even alongside ``langchain-core``, and importing
+    it costs about 0.2 s, so it is only looked up when a tool actually raises.
+    """
+    global _BUBBLE_UP
+    if _BUBBLE_UP is None:
+        try:
+            from langgraph.errors import GraphBubbleUp
+        except ImportError:
+            _BUBBLE_UP = ()
+        else:
+            _BUBBLE_UP = (GraphBubbleUp,)
+    return _BUBBLE_UP

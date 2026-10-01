@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import pytest
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import StructuredTool, ToolException, tool
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.errors import GraphInterrupt
+from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
+from langgraph.types import Command, interrupt
 
+import santati.integrations.langchain as langchain_module
 from santati.integrations.langchain import SantatiCallbackHandler
 
 TOOL_CALL = {"name": "lookup_invoice", "args": {"invoice_id": "inv_1"}, "id": "call_1", "type": "tool_call"}
@@ -86,6 +93,69 @@ def test_an_actor_and_custom_event_names_replace_the_defaults() -> None:
 
     assert captured[0]["event"] == "tool.used"
     assert captured[0]["actor"] == {"type": "user", "id": "usr_123", "name": "Dana Ortiz"}
+
+
+@tool
+def pause_for_approval(invoice_id: str) -> str:
+    """Ask a human before voiding; LangGraph raises this to pause the run."""
+    raise GraphInterrupt(())
+
+
+def test_an_interrupted_tool_call_is_not_audited() -> None:
+    captured: list[dict[str, Any]] = []
+
+    with pytest.raises(GraphInterrupt):
+        pause_for_approval.invoke(TOOL_CALL, config={"callbacks": [handler(captured)]})
+
+    assert captured == []
+
+
+def test_a_failure_is_still_audited_without_langgraph(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The extra installs langchain-core only, so langgraph may be absent."""
+    # Both entries: a cached submodule alone would satisfy the import.
+    monkeypatch.delitem(sys.modules, "langgraph.errors")
+    monkeypatch.setitem(sys.modules, "langgraph", None)
+    monkeypatch.setattr(langchain_module, "_BUBBLE_UP", None)
+    captured: list[dict[str, Any]] = []
+
+    with pytest.raises(RuntimeError, match="boom"):
+        explode.invoke(TOOL_CALL, config={"callbacks": [handler(captured)]})
+
+    assert langchain_module._bubble_up_types() == ()
+    assert [event["event"] for event in captured] == ["agent.tool_call.failed"]
+    assert captured[0]["data"]["error"] == "RuntimeError: boom"
+
+
+@tool
+def void_invoice_with_approval(invoice_id: str) -> str:
+    """Void one invoice, once a human approves it."""
+    approved = interrupt({"action": "void", "invoice_id": invoice_id})
+    return f"voided {invoice_id}: {approved}"
+
+
+def test_a_paused_approval_records_nothing_and_its_resume_records_once() -> None:
+    """The real flow: a human-in-the-loop pause, then the resumed run executes the tool."""
+    captured: list[dict[str, Any]] = []
+    builder = StateGraph(MessagesState)
+    builder.add_node("tools", ToolNode([void_invoice_with_approval]))
+    builder.add_edge(START, "tools")
+    builder.add_edge("tools", END)
+    graph = builder.compile(checkpointer=InMemorySaver())
+    config = {"configurable": {"thread_id": "t1"}, "callbacks": [handler(captured)]}
+    call = AIMessage(
+        content="",
+        tool_calls=[
+            {"name": "void_invoice_with_approval", "args": {"invoice_id": "inv_1"}, "id": "call_1", "type": "tool_call"}
+        ],
+    )
+
+    paused = graph.invoke({"messages": [call]}, config)
+    assert paused["__interrupt__"], "the graph should have paused for approval"
+    assert captured == []
+
+    graph.invoke(Command(resume=True), config)
+    assert [event["event"] for event in captured] == ["agent.tool_call.succeeded"]
+    assert captured[0]["data"] == {"arguments": {"invoice_id": "inv_1"}}
 
 
 def test_a_raising_dispatch_leaves_the_tool_call_alone() -> None:
