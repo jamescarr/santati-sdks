@@ -78,13 +78,50 @@ Santati::Client.new(
   max_retries: 2,                       # transport, 500/502/503/504 and 429 (unless quota_exceeded)
   initial_backoff_ms: 250,
   max_backoff_ms: 8000,
-  headers: {}                           # extra headers on every request
+  headers: {},                          # extra headers on every request
+  outbox: nil,                          # store for `log`; default Santati::MemoryOutbox.new(max_pending: 10_000)
+  batch_size: 100,                      # envelopes per outbox request, 1..500
+  flush_interval_ms: 1000,              # the worker's tick, > 0
+  pre_send: nil,                        # ->(event) { event or nil to drop }
+  post_send: nil                        # ->(event, outcome) { … }
 )
 ```
 
 Every request carries `Authorization: Api-Key <api_key>` and
 `User-Agent: santati-ruby/<version>`; redirects are never followed, so the key
 is never replayed to another host.
+
+## Outbox and `log`
+
+`log` validates like `events.emit`, stores the event in an outbox and returns
+its idempotency key without making a request; a background thread sends the
+outbox in batches. `close` stops the thread and flushes what is pending.
+
+```ruby
+client = Santati::Client.new(
+  api_key: ENV.fetch("SANTATI_API_KEY"),
+  trail: "billing",
+  post_send: ->(event, outcome) { warn "#{event[:event]}: #{outcome.status}" }
+)
+
+key = client.log(event: "invoice.voided", organization_id: "org_acme")
+client.close # drains the outbox; `log` raises Santati::OutboxError afterwards
+```
+
+`client.flush` runs one send pass now. The default store keeps up to 10,000
+events in memory. To survive restarts, or to share one outbox between
+processes, use the Redis adapter (Redis Streams); add `gem "redis", ">= 5"` to
+your Gemfile, then:
+
+```ruby
+require "santati/outbox/redis"
+
+outbox = Santati::RedisOutbox.new(Redis.new(url: ENV.fetch("REDIS_URL")))
+client = Santati::Client.new(api_key: ENV.fetch("SANTATI_API_KEY"), trail: "billing", outbox: outbox)
+```
+
+A store failure raises `Santati::OutboxError` (`code`: `outbox_full`,
+`store_unavailable` or `closed`).
 
 ## Errors
 
@@ -100,6 +137,7 @@ Every failure raises a `Santati::Error` subclass with `status`, `code`,
 |HTTP 429|`Santati::RateLimitedError`|
 |HTTP 500–599|`Santati::ServerError`|
 |no HTTP response|`Santati::TransportError`|
+|outbox store failure, `closed`, or a raising `pre_send`|`Santati::OutboxError`|
 |anything else|`Santati::ApiError`|
 
 ```ruby

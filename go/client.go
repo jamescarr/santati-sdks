@@ -15,6 +15,10 @@ const (
 	defaultMaxRetries     = 2
 	defaultInitialBackoff = 250 * time.Millisecond
 	defaultMaxBackoff     = 8 * time.Second
+	defaultBatchSize      = 100
+	maxBatchSize          = 500
+	defaultFlushInterval  = time.Second
+	defaultMaxPending     = 10000
 )
 
 // Client is a Santati API client. Create one with NewClient and reuse it; it
@@ -30,6 +34,8 @@ type Client struct {
 	maxBackoff     time.Duration
 
 	api *core.APIClient
+
+	outbox *outbox
 }
 
 type clientConfig struct {
@@ -40,6 +46,11 @@ type clientConfig struct {
 	initialBackoff time.Duration
 	maxBackoff     time.Duration
 	headers        map[string]string
+	outbox         OutboxStore
+	batchSize      int
+	flushInterval  time.Duration
+	preSend        PreSendHook
+	postSend       PostSendHook
 }
 
 // Option configures a Client.
@@ -82,8 +93,39 @@ func WithHeader(key, value string) Option {
 	return func(c *clientConfig) { c.headers[key] = value }
 }
 
+// WithOutbox sets the store Log writes to. The default is a MemoryOutbox that
+// holds up to 10000 events.
+func WithOutbox(store OutboxStore) Option {
+	return func(c *clientConfig) { c.outbox = store }
+}
+
+// WithBatchSize sets how many events the outbox worker sends per request. It
+// must be between 1 and 500; the default is 100.
+func WithBatchSize(batchSize int) Option {
+	return func(c *clientConfig) { c.batchSize = batchSize }
+}
+
+// WithFlushInterval sets the outbox worker's tick. It must be positive; the
+// default is 1s.
+func WithFlushInterval(interval time.Duration) Option {
+	return func(c *clientConfig) { c.flushInterval = interval }
+}
+
+// WithPreSend sets the hook called on each stored event right before its
+// batch request. See PreSendHook.
+func WithPreSend(hook PreSendHook) Option {
+	return func(c *clientConfig) { c.preSend = hook }
+}
+
+// WithPostSend sets the hook called with the outcome of each sent event. See
+// PostSendHook.
+func WithPostSend(hook PostSendHook) Option {
+	return func(c *clientConfig) { c.postSend = hook }
+}
+
 // NewClient builds a client for a team API key. It returns a *Error with kind
-// KindValidation for an empty key or an Authorization header in headers.
+// KindValidation for an empty key, an Authorization header in headers, a batch
+// size outside 1..500 or a non-positive flush interval.
 func NewClient(apiKey string, opts ...Option) (*Client, error) {
 	if apiKey == "" {
 		return nil, validationError("api_key", "api_key must not be empty")
@@ -96,9 +138,17 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 		initialBackoff: defaultInitialBackoff,
 		maxBackoff:     defaultMaxBackoff,
 		headers:        map[string]string{},
+		batchSize:      defaultBatchSize,
+		flushInterval:  defaultFlushInterval,
 	}
 	for _, opt := range opts {
 		opt(cfg)
+	}
+	if cfg.batchSize < 1 || cfg.batchSize > maxBatchSize {
+		return nil, validationError("batch_size", "batch_size must be between 1 and 500")
+	}
+	if cfg.flushInterval <= 0 {
+		return nil, validationError("flush_interval_ms", "flush_interval_ms must be greater than 0")
 	}
 	for key := range cfg.headers {
 		if strings.EqualFold(key, "authorization") {
@@ -135,6 +185,19 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 		api:            core.NewAPIClient(coreCfg),
 	}
 	c.Events = &Events{client: c}
+
+	store := cfg.outbox
+	if store == nil {
+		store, _ = NewMemoryOutbox(defaultMaxPending)
+	}
+	c.outbox = &outbox{
+		client:    c,
+		store:     store,
+		batchSize: cfg.batchSize,
+		interval:  cfg.flushInterval,
+		preSend:   cfg.preSend,
+		postSend:  cfg.postSend,
+	}
 	return c, nil
 }
 

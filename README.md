@@ -4,8 +4,8 @@ Santati SDKs for Python, TypeScript, Go, Rust, Elixir, Ruby and PHP. Each
 package is an [openapi-generator](https://openapi-generator.tech) core
 generated from the control plane's public spec, wrapped in a small
 hand-written facade idiomatic to its language. The surface is **emitting
-events** (one or a batch) and **fetching events** (list + iterate) with a team
-API key.
+events** (one or a batch, or fire-and-forget through an outbox with `log`) and
+**fetching events** (list + iterate) with a team API key.
 
 Read [`docs/sdk-surface.md`](docs/sdk-surface.md) for the behaviour every SDK
 implements and [`conformance/README.md`](conformance/README.md) for the vectors

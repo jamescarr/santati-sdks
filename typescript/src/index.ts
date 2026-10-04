@@ -1,9 +1,10 @@
-export { Santati } from "./client.js";
+export { Santati, envelopeFromWire, envelopeToWire } from "./client.js";
 export type { SantatiOptions } from "./client.js";
 export {
   ApiError,
   AuthError,
   NotFoundError,
+  OutboxError,
   RateLimitedError,
   SantatiError,
   ServerError,
@@ -11,6 +12,7 @@ export {
   ValidationError,
 } from "./errors.js";
 export type { SantatiErrorOptions } from "./errors.js";
+export { MemoryOutbox } from "./outbox.js";
 export type {
   ActorInput,
   BatchItem,
@@ -22,6 +24,12 @@ export type {
   EventPage,
   IterateParams,
   ListParams,
+  OutboxEntry,
+  OutboxStore,
+  PostSendHook,
+  PreSendHook,
+  SendOutcome,
+  SendStatus,
   TargetInput,
 } from "./types.js";
 export { VERSION } from "./version.js";

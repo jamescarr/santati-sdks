@@ -11,11 +11,14 @@ use Santati\Core\ObjectSerializer;
 use Santati\Exception\ApiException;
 use Santati\Exception\AuthException;
 use Santati\Exception\NotFoundException;
+use Santati\Exception\OutboxException;
 use Santati\Exception\RateLimitedException;
 use Santati\Exception\SantatiException;
 use Santati\Exception\ServerException;
 use Santati\Exception\TransportException;
 use Santati\Exception\ValidationException;
+use Santati\Outbox\MemoryOutbox;
+use Santati\SendOutcome;
 
 /**
  * Runs every vector in `conformance/cases/*.json` against the PHP facade,
@@ -34,6 +37,7 @@ final class ConformanceTest extends TestCase
         ServerException::class => 'ServerError',
         TransportException::class => 'TransportError',
         ApiException::class => 'ApiError',
+        OutboxException::class => 'OutboxError',
     ];
 
     /**
@@ -84,9 +88,10 @@ final class ConformanceTest extends TestCase
             $bindings = [];
             $thrown = null;
             $produced = null;
+            $outcomes = [];
 
             try {
-                $produced = $this->produce($this->client($input['client'], $origin), $case);
+                $produced = $this->produce($this->client($input['client'], $origin, $input['hooks'] ?? null, $outcomes), $case, $outcomes);
             } catch (\Throwable $e) {
                 $thrown = $e;
             }
@@ -124,10 +129,49 @@ final class ConformanceTest extends TestCase
     }
 
     /**
-     * @param array<string, mixed> $options
+     * @param array<string, mixed>      $options
+     * @param array<string, mixed>|null $hooks    the `log` vectors' hook behaviours
+     * @param list<array<string, mixed>> $outcomes collects the `post_send` calls
      */
-    private function client(array $options, string $origin): Client
+    private function client(array $options, string $origin, ?array $hooks, array &$outcomes): Client
     {
+        $pre = $hooks['pre_send'] ?? null;
+        $preSend = $pre === null ? null : static function (array $event) use ($pre): ?array {
+            if (($pre['raise'] ?? false) === true) {
+                throw new \RuntimeException('conformance pre_send');
+            }
+
+            if (in_array($event['event'], $pre['drop_events'] ?? [], true)) {
+                return null;
+            }
+
+            if (isset($pre['set_metadata'])) {
+                $event['metadata'] = array_merge($event['metadata'] ?? [], $pre['set_metadata']);
+            }
+
+            return $event;
+        };
+        $raise = ($hooks['post_send']['raise'] ?? false) === true;
+        $postSend = static function (array $event, SendOutcome $outcome) use (&$outcomes, $raise): void {
+            $error = $outcome->error;
+            $outcomes[] = [
+                'event' => json_decode(json_encode($event, JSON_THROW_ON_ERROR), true),
+                'status' => $outcome->status,
+                'id' => $outcome->id,
+                'error' => $error === null ? null : [
+                    'kind' => self::KINDS[$error::class] ?? $error::class,
+                    'status' => $error->getStatus(),
+                    'code' => $error->getErrorCode(),
+                    'field' => $error->getField(),
+                    'retry_after' => $error->getRetryAfter(),
+                ],
+            ];
+
+            if ($raise) {
+                throw new \RuntimeException('conformance post_send');
+            }
+        };
+
         return new Client(
             apiKey: $options['api_key'],
             baseUrl: $origin . ($options['base_path'] ?? ''),
@@ -137,13 +181,19 @@ final class ConformanceTest extends TestCase
             initialBackoffMs: $options['initial_backoff_ms'] ?? 250,
             maxBackoffMs: $options['max_backoff_ms'] ?? 8000,
             headers: $options['headers'] ?? [],
+            outbox: isset($options['max_pending']) ? new MemoryOutbox($options['max_pending']) : null,
+            batchSize: $options['batch_size'] ?? 100,
+            preSend: $preSend,
+            postSend: $postSend,
         );
     }
 
     /**
      * Runs the case's operation and returns the expected `ok` payload.
+     *
+     * @param list<array<string, mixed>> $outcomes the `post_send` calls recorded so far
      */
-    private function produce(Client $client, array $case): mixed
+    private function produce(Client $client, array $case, array &$outcomes): mixed
     {
         $input = $case['input'];
 
@@ -151,9 +201,41 @@ final class ConformanceTest extends TestCase
             'emit' => self::wire($this->emitPayload($client, $input['event'])),
             'emit_batch' => self::wire($this->batchPayload($client, $input['events'])),
             'list' => self::wire($this->pagePayload($client, $input['params'] ?? [])),
+            'log' => $this->logPayload($client, $input['events'], $outcomes),
             'iterate' => self::wire(iterator_to_array($client->events->iterate($input['params'] ?? []), false)),
             default => throw new \RuntimeException('unknown operation ' . $case['operation']),
         };
+    }
+
+    /**
+     * Logs every event, closes the client (also when logging failed), then
+     * reports the keys and outcomes or the remembered error.
+     *
+     * @param list<array<string, mixed>> $events
+     * @param list<array<string, mixed>> $outcomes
+     *
+     * @return array<string, mixed>
+     */
+    private function logPayload(Client $client, array $events, array &$outcomes): array
+    {
+        $keys = [];
+        $remembered = null;
+
+        try {
+            foreach ($events as $event) {
+                $keys[] = $client->log($event);
+            }
+        } catch (SantatiException $e) {
+            $remembered = $e;
+        } finally {
+            $client->close();
+        }
+
+        if ($remembered !== null) {
+            throw $remembered;
+        }
+
+        return ['keys' => $keys, 'outcomes' => $outcomes];
     }
 
     /**

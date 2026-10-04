@@ -29,6 +29,14 @@ interface ClientOptions {
   max_backoff_ms?: number;
   headers?: Record<string, string>;
   base_path?: string;
+  batch_size?: number;
+  flush_interval_ms?: number;
+  max_pending?: number;
+}
+
+interface Hooks {
+  pre_send?: { set_metadata?: Record<string, string>; drop_events?: string[]; raise?: true };
+  post_send?: { raise?: true };
 }
 
 /** A vector's event: the wire's snake_case names, the facade's camelCase shapes. */
@@ -85,6 +93,7 @@ interface Case {
     event?: WireEvent;
     events?: WireEvent[];
     params?: WireParams;
+    hooks?: Hooks;
   };
   expect: Expect;
 }
@@ -121,6 +130,7 @@ const ERROR_KINDS: Record<string, unknown> = {
   ServerError: santati.ServerError,
   TransportError: santati.TransportError,
   ApiError: santati.ApiError,
+  OutboxError: santati.OutboxError,
 };
 
 /** The `$generated` values bound so far: one label, one value, per case. */
@@ -196,7 +206,30 @@ async function startGateway(
   };
 }
 
-function makeClient(origin: string, options: ClientOptions): santati.Santati {
+interface Outcome {
+  event: unknown;
+  status: string;
+  id?: string;
+  error?: ErrorRecord;
+}
+
+function errorRecord(error: santati.SantatiError): ErrorRecord {
+  return {
+    kind: kindOf(error) ?? error.name,
+    status: error.status,
+    code: error.code,
+    field: error.field,
+    retry_after: error.retryAfter,
+  };
+}
+
+function makeClient(
+  origin: string,
+  options: ClientOptions,
+  hooks: Hooks = {},
+  outcomes: Outcome[] = [],
+): santati.Santati {
+  const pre = hooks.pre_send;
   return new santati.Santati({
     apiKey: options.api_key,
     baseUrl: origin + (options.base_path ?? ""),
@@ -206,6 +239,31 @@ function makeClient(origin: string, options: ClientOptions): santati.Santati {
     initialBackoffMs: options.initial_backoff_ms,
     maxBackoffMs: options.max_backoff_ms,
     headers: options.headers,
+    batchSize: options.batch_size,
+    flushIntervalMs: options.flush_interval_ms,
+    outbox:
+      options.max_pending != null
+        ? new santati.MemoryOutbox({ maxPending: options.max_pending })
+        : undefined,
+    preSend: pre
+      ? (event) => {
+          if (pre.raise) throw new Error("conformance pre_send");
+          if (pre.drop_events?.includes(event.event)) return null;
+          if (pre.set_metadata) {
+            return { ...event, metadata: { ...event.metadata, ...pre.set_metadata } };
+          }
+          return event;
+        }
+      : undefined,
+    postSend: (event, outcome) => {
+      outcomes.push({
+        event: santati.envelopeToWire(event),
+        status: outcome.status,
+        id: outcome.id,
+        error: outcome.error && errorRecord(outcome.error),
+      });
+      if (hooks.post_send?.raise) throw new Error("conformance post_send");
+    },
   });
 }
 
@@ -247,7 +305,8 @@ function listParams(raw: WireParams = {}): santati.ListParams {
 async function dispatch(c: Case, requests: Recorded[]): Promise<unknown> {
   const gateway = await startGateway(c.input.gateway, requests);
   try {
-    const client = makeClient(gateway.origin, c.input.client);
+    const outcomes: Outcome[] = [];
+    const client = makeClient(gateway.origin, c.input.client, c.input.hooks, outcomes);
     switch (c.operation) {
       case "emit": {
         const result = await client.events.emit(eventInput(c.input.event));
@@ -280,6 +339,19 @@ async function dispatch(c: Case, requests: Recorded[]): Promise<unknown> {
           events.push(santati.AuditEventToJSON(event));
         }
         return events;
+      }
+      case "log": {
+        const keys: string[] = [];
+        let failure: unknown;
+        try {
+          for (const event of c.input.events ?? []) keys.push(await client.log(eventInput(event)));
+        } catch (error) {
+          if (!(error instanceof santati.SantatiError)) throw error;
+          failure = error;
+        }
+        await client.close();
+        if (failure !== undefined) throw failure;
+        return { keys, outcomes };
       }
       default:
         return assert.fail(`unknown conformance operation ${c.operation}`);

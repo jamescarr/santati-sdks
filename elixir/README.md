@@ -93,6 +93,25 @@ client
 `stream/2` yields `SantatiCore.Model.AuditEvent` structs and raises the error of
 the page that failed — events from earlier pages have already been yielded.
 
+## Outbox and `log`
+
+`Santati.log/2` is a fire-and-forget emit: it validates the event like `emit/2`,
+stores it in an outbox and answers the idempotency key. A `Santati.Outbox`
+process sends the outbox in batches in the background; `pre_send` and
+`post_send` hooks observe every event, and stopping the process flushes it.
+
+```elixir
+{:ok, _pid} = Santati.Outbox.start_link(client: client, name: MyApp.Santati)
+
+{:ok, key} = Santati.log(MyApp.Santati, %{event: "invoice.voided"})
+
+Santati.Outbox.stop(MyApp.Santati)
+```
+
+Events are held in memory by default. For a durable outbox use the Redis adapter:
+add `{:redix, "~> 1.5"}` to your dependencies and pass
+`store: {Santati.Outbox.Redis, conn: redix_conn}`.
+
 ## Errors
 
 `Santati.new/1`, `Santati.Events.emit/2`, `emit_batch/2` and `list/2` answer

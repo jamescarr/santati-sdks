@@ -1,4 +1,4 @@
-/** One base type and seven kinds; `status` is null when no response was answered. */
+/** One base type and eight kinds; `status` is null when no response was answered. */
 export interface SantatiErrorOptions {
   status?: number | null;
   code?: string | null;
@@ -46,3 +46,9 @@ export class TransportError extends SantatiError {}
 
 /** Anything else: another non-2xx, an unexpected 2xx, an undecodable body. */
 export class ApiError extends SantatiError {}
+
+/**
+ * The outbox store refused or failed (`outbox_full`, `store_unavailable`,
+ * `closed`), or a `pre_send` hook threw (`hook_failed`). `status` is null.
+ */
+export class OutboxError extends SantatiError {}

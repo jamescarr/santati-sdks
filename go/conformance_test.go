@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -75,6 +77,18 @@ type caseInput struct {
 	Event   json.RawMessage            `json:"event"`
 	Events  []json.RawMessage          `json:"events"`
 	Params  json.RawMessage            `json:"params"`
+	Hooks   *hooksJSON                 `json:"hooks"`
+}
+
+type hooksJSON struct {
+	PreSend *struct {
+		SetMetadata map[string]string `json:"set_metadata"`
+		DropEvents  []string          `json:"drop_events"`
+		Raise       bool              `json:"raise"`
+	} `json:"pre_send"`
+	PostSend *struct {
+		Raise bool `json:"raise"`
+	} `json:"post_send"`
 }
 
 type clientJSON struct {
@@ -86,6 +100,9 @@ type clientJSON struct {
 	MaxBackoffMS     *float64          `json:"max_backoff_ms"`
 	Headers          map[string]string `json:"headers"`
 	BasePath         string            `json:"base_path"`
+	BatchSize        *int              `json:"batch_size"`
+	FlushIntervalMS  *float64          `json:"flush_interval_ms"`
+	MaxPending       *int              `json:"max_pending"`
 }
 
 func runCase(t *testing.T, testCase testCase) {
@@ -106,7 +123,8 @@ func runCase(t *testing.T, testCase testCase) {
 		origin = server.URL
 	}
 
-	client, clientErr := buildClient(input.Client, origin)
+	outcomes := &outcomeLog{}
+	client, clientErr := buildClient(input.Client, origin, hookOptions(input.Hooks, outcomes)...)
 	bindings := map[string]string{}
 
 	if clientErr != nil {
@@ -146,6 +164,8 @@ func runCase(t *testing.T, testCase testCase) {
 		if err == nil {
 			actual = events
 		}
+	case "log":
+		actual, err = runLog(ctx, client, decodeEvents(input.Events), outcomes)
 	default:
 		t.Fatalf("unknown operation %q", testCase.Operation)
 	}
@@ -432,8 +452,22 @@ func responseFrom(raw map[string]json.RawMessage) gatewayResponse {
 
 // ---- inputs --------------------------------------------------------------
 
-func buildClient(c clientJSON, origin string) (*santati.Client, error) {
+func buildClient(c clientJSON, origin string, extra ...santati.Option) (*santati.Client, error) {
 	options := []santati.Option{santati.WithBaseURL(origin + c.BasePath)}
+	options = append(options, extra...)
+	if c.BatchSize != nil {
+		options = append(options, santati.WithBatchSize(*c.BatchSize))
+	}
+	if c.FlushIntervalMS != nil {
+		options = append(options, santati.WithFlushInterval(time.Duration(*c.FlushIntervalMS*float64(time.Millisecond))))
+	}
+	if c.MaxPending != nil {
+		store, err := santati.NewMemoryOutbox(*c.MaxPending)
+		if err != nil {
+			return nil, err
+		}
+		options = append(options, santati.WithOutbox(store))
+	}
 	if c.Trail != "" {
 		options = append(options, santati.WithTrail(c.Trail))
 	}
@@ -586,6 +620,107 @@ func collectIterate(ctx context.Context, client *santati.Client, params santati.
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+// ---- log -----------------------------------------------------------------
+
+// outcomeLog collects what the runner's post_send hook sees. The hook runs on
+// the worker goroutine, so access is locked.
+type outcomeLog struct {
+	mu      sync.Mutex
+	entries []any
+}
+
+func (o *outcomeLog) add(entry any) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.entries = append(o.entries, entry)
+}
+
+func (o *outcomeLog) snapshot() []any {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	return append([]any{}, o.entries...)
+}
+
+// hookOptions registers the case's pre_send hook (when present) and always a
+// post_send hook that records the outcome, per conformance/README.md.
+func hookOptions(hooks *hooksJSON, outcomes *outcomeLog) []santati.Option {
+	var options []santati.Option
+	if hooks != nil && hooks.PreSend != nil {
+		spec := hooks.PreSend
+		options = append(options, santati.WithPreSend(func(event santati.EventInput) (santati.EventInput, bool) {
+			if spec.Raise {
+				panic("conformance pre_send")
+			}
+			if slices.Contains(spec.DropEvents, event.Event) {
+				return event, false
+			}
+			if spec.SetMetadata != nil {
+				merged := map[string]string{}
+				maps.Copy(merged, event.Metadata)
+				maps.Copy(merged, spec.SetMetadata)
+				event.Metadata = merged
+			}
+			return event, true
+		}))
+	}
+	raise := hooks != nil && hooks.PostSend != nil && hooks.PostSend.Raise
+	options = append(options, santati.WithPostSend(func(event santati.EventInput, outcome santati.SendOutcome) {
+		entry := map[string]any{"event": toJSONValue(event), "status": string(outcome.Status)}
+		if outcome.ID != "" {
+			entry["id"] = outcome.ID
+		}
+		if outcome.Err != nil {
+			var retryAfter any
+			if outcome.Err.RetryAfter != nil {
+				retryAfter = *outcome.Err.RetryAfter
+			}
+			var status any
+			if outcome.Err.Status != 0 {
+				status = outcome.Err.Status
+			}
+			entry["error"] = map[string]any{
+				"kind":        string(outcome.Err.Kind),
+				"status":      status,
+				"code":        nullIfEmpty(outcome.Err.Code),
+				"field":       nullIfEmpty(outcome.Err.Field),
+				"retry_after": retryAfter,
+			}
+		}
+		outcomes.add(entry)
+		if raise {
+			panic("conformance post_send")
+		}
+	}))
+	return options
+}
+
+func nullIfEmpty(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func runLog(ctx context.Context, client *santati.Client, events []santati.EventInput, outcomes *outcomeLog) (any, error) {
+	keys := []any{}
+	var logErr error
+	for _, event := range events {
+		key, err := client.Log(ctx, event)
+		if err != nil {
+			logErr = err
+			break
+		}
+		keys = append(keys, key)
+	}
+	if err := client.Close(ctx); err != nil && logErr == nil {
+		logErr = err
+	}
+	if logErr != nil {
+		return nil, logErr
+	}
+	return map[string]any{"keys": keys, "outcomes": outcomes.snapshot()}, nil
 }
 
 // ---- result values -------------------------------------------------------

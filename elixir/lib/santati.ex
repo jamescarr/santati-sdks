@@ -13,6 +13,13 @@ defmodule Santati do
       |> Santati.Events.stream(trail: "billing")
       |> Enum.each(&IO.inspect(&1.id))
 
+      {:ok, _outbox} = Santati.Outbox.start_link(client: client, name: MyApp.Santati)
+      {:ok, key} = Santati.log(MyApp.Santati, %{event: "invoice.voided"})
+      :ok = Santati.flush(MyApp.Santati)
+
+  `log/2` stores the event in an outbox and answers its idempotency key; a
+  background worker sends it in batches (see `Santati.Outbox`).
+
   Every call answers `{:ok, result}` or `{:error, exception}`; `stream/2`
   raises the exception of the page that failed.
   """
@@ -39,6 +46,14 @@ defmodule Santati do
   """
   @spec new(keyword()) :: {:ok, Client.t()} | {:error, Santati.ValidationError.t()}
   def new(options \\ []), do: Client.new(options)
+
+  @doc "Logs an event through the `Santati.Outbox` process `server`; see `Santati.Outbox.log/2`."
+  @spec log(GenServer.server(), map() | keyword()) :: {:ok, String.t()} | {:error, Exception.t()}
+  defdelegate log(server, event), to: Santati.Outbox
+
+  @doc "Runs one outbox pass synchronously; see `Santati.Outbox.flush/2`."
+  @spec flush(GenServer.server(), timeout()) :: :ok | {:error, Exception.t()}
+  defdelegate flush(server, timeout \\ :infinity), to: Santati.Outbox
 
   @doc "Returns the version of this SDK."
   @spec version() :: String.t()

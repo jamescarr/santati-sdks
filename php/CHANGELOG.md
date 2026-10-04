@@ -6,6 +6,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via `predis/predis`), `preSend`/`postSend` hooks, `flush()`/`close()`; pending events are also flushed at shutdown.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added

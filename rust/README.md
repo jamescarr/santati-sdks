@@ -96,9 +96,34 @@ failures, 500/502/503/504 and 429 (unless the code is `quota_exceeded`) are
 retried with the identical request, honouring `Retry-After` when the server
 sends one.
 
+## Outbox and `log`
+
+`log` is fire-and-forget: it validates like `emit`, stores the envelope in an
+outbox and returns the idempotency key. A background task sends the outbox in
+batches; `close` stops it and drains what is left, so call it before exiting.
+
+```rust
+use santati::{EventInput, Santati};
+
+#[tokio::main]
+async fn main() -> Result<(), santati::Error> {
+    let client = Santati::builder("sat_sk_...").trail("billing").build()?;
+    let key = client.log(EventInput::new("invoice.voided")).await?;
+    println!("queued {key}");
+    client.close().await?;
+    Ok(())
+}
+```
+
+The default store is an in-memory `MemoryOutbox` (10 000 entries). Tune it with
+`batch_size`, `flush_interval`, `pre_send`, `post_send` and `outbox` on the
+builder. For a Redis Streams store, enable the optional `redis` feature
+(`santati = { version = "0.1", features = ["redis"] }`) and pass
+`RedisOutbox::new(connection_manager)` to `Builder::outbox`.
+
 ## Errors
 
-One `Error` enum with seven kinds, each carrying `ErrorDetails`:
+One `Error` enum with eight kinds, each carrying `ErrorDetails`:
 
 ```rust
 use santati::ErrorKind;
@@ -113,7 +138,7 @@ match client.events().list(Default::default()).await {
 ```
 
 `ErrorKind` is `Validation`, `Auth`, `NotFound`, `RateLimited`, `Server`,
-`Transport` or `Api`; `error.status()`, `error.code()` and `error.field()`
+`Transport`, `Api` or `Outbox`; `error.status()`, `error.code()` and `error.field()`
 carry the server's side of the failure when there is one.
 
 ## Notes

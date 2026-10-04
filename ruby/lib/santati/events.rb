@@ -36,9 +36,32 @@ module Santati
       end
     end
 
+    # Validate like {#emit} and return the stored event for the outbox: a plain
+    # symbol-keyed Hash with the trail and the idempotency key resolved.
+    #
+    # @api private
+    def prepare(event:, trail: nil, organization_id: nil, actor: nil, targets: nil, metadata: nil,
+      data: nil, context: nil, created_at: nil, idempotency_key: nil)
+      stored = build_envelope(
+        event: event, trail: trail, organization_id: organization_id, actor: actor,
+        targets: targets, metadata: metadata, data: data, context: context,
+        created_at: created_at, idempotency_key: idempotency_key, field_prefix: ""
+      )
+      stored[:actor] = normalize_hash(actor) unless actor.nil?
+      stored[:targets] = targets.map { |target| normalize_hash(target) } unless targets.nil?
+      stored
+    end
+
     # Emit a batch of events. Returns a {BatchResult}; a 207 is a result, not
     # an error.
     def emit_batch(events)
+      emit_batch_with_status(events).last
+    end
+
+    # Like {#emit_batch}, but returns `[http_status, BatchResult]` (202 or 207).
+    #
+    # @api private
+    def emit_batch_with_status(events)
       events = Array(events)
       raise ValidationError.new("events must be a non-empty list", field: "events") if events.empty?
 
@@ -60,7 +83,7 @@ module Santati
       Retry.call(@client) do
         body, status = generated { @client.api.events_create_with_http_info(request, debug_return_type: "String") }
         case status
-        when 202, 207 then decode_batch(body, status)
+        when 202, 207 then [status, decode_batch(body, status)]
         else raise ApiError.new("unexpected status #{status}", status: status)
         end
       end

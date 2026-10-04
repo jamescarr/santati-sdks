@@ -6,6 +6,10 @@ All notable changes to `@santati/node` are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via `@santati/node/redis` with the optional `ioredis` peer dependency), background batching, `preSend`/`postSend` hooks, `flush()`/`close()`.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added

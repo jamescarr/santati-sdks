@@ -5,7 +5,7 @@ import "fmt"
 // Kind is the class of a failure. Its string value is the kind's name.
 type Kind string
 
-// The seven error kinds.
+// The eight error kinds.
 const (
 	// KindValidation covers local validation and HTTP 400, 413 and 422.
 	KindValidation Kind = "ValidationError"
@@ -21,6 +21,10 @@ const (
 	KindTransport Kind = "TransportError"
 	// KindAPI covers every other non-2xx, unexpected 2xx and undecodable 2xx.
 	KindAPI Kind = "ApiError"
+	// KindOutbox covers an outbox store that refused or failed (codes
+	// "outbox_full", "store_unavailable", "closed") and a pre_send hook that
+	// panicked (code "hook_failed"). Status is always 0.
+	KindOutbox Kind = "OutboxError"
 )
 
 // Error is every failure the SDK reports. Status is 0 when there was no
@@ -53,4 +57,8 @@ func transportError(err error) *Error {
 		message = err.Error()
 	}
 	return &Error{Kind: KindTransport, Message: message}
+}
+
+func outboxError(code, message string) *Error {
+	return &Error{Kind: KindOutbox, Code: code, Message: message}
 }

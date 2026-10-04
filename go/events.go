@@ -202,7 +202,9 @@ func (c *Client) batchOnce(request core.ApiEventsCreateRequest) (*BatchResult, e
 		if jsonErr := json.Unmarshal(body, &result); jsonErr != nil {
 			return nil, apiError(resp.StatusCode, jsonErr.Error())
 		}
-		return toBatchResult(&result), nil
+		batch := toBatchResult(&result)
+		batch.status = resp.StatusCode
+		return batch, nil
 	default:
 		if resp.StatusCode >= 300 {
 			return nil, c.httpError(resp)

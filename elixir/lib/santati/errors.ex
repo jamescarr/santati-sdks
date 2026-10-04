@@ -122,6 +122,21 @@ defmodule Santati.ApiError do
   @type t :: %__MODULE__{}
 end
 
+defmodule Santati.OutboxError do
+  @moduledoc """
+  The outbox store refused or failed (`outbox_full`, `store_unavailable`,
+  `closed`), or a `pre_send` hook raised (`hook_failed`). `status` is `nil`.
+  """
+
+  defexception status: nil,
+               code: nil,
+               field: nil,
+               retry_after: nil,
+               message: "outbox failed"
+
+  @type t :: %__MODULE__{}
+end
+
 defmodule Santati.Errors do
   @moduledoc false
 
@@ -131,6 +146,7 @@ defmodule Santati.Errors do
     ApiError,
     AuthError,
     NotFoundError,
+    OutboxError,
     RateLimitedError,
     ServerError,
     TransportError,
@@ -140,6 +156,11 @@ defmodule Santati.Errors do
   @spec validation(String.t() | nil, String.t()) :: ValidationError.t()
   def validation(field, message) do
     %ValidationError{status: nil, code: nil, field: field, retry_after: nil, message: message}
+  end
+
+  @spec outbox(String.t(), String.t()) :: OutboxError.t()
+  def outbox(code, message) do
+    %OutboxError{status: nil, code: code, field: nil, retry_after: nil, message: message}
   end
 
   @spec transport(term()) :: TransportError.t()

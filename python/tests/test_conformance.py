@@ -36,6 +36,7 @@ ERROR_CLASSES: dict[str, type[BaseException]] = {
         "ServerError",
         "TransportError",
         "ApiError",
+        "OutboxError",
     )
 }
 
@@ -127,10 +128,13 @@ def _gateway(spec: dict[str, Any], requests: list[RecordedRequest]) -> Iterator[
         thread.join()
 
 
-def _open_client(case_input: dict[str, Any], base_url: str) -> santati.Santati:
+def _open_client(case_input: dict[str, Any], base_url: str, **extra: Any) -> santati.Santati:
     options = dict(case_input.get("client") or {})
     base_path = options.pop("base_path", "")
-    return santati.Santati(base_url=f"{base_url}{base_path}", **options)
+    max_pending = options.pop("max_pending", None)
+    if max_pending is not None:
+        options["outbox"] = santati.MemoryOutbox(max_pending=max_pending)
+    return santati.Santati(base_url=f"{base_url}{base_path}", **options, **extra)
 
 
 def _run_emit(case: dict[str, Any], base_url: str) -> Any:
@@ -174,11 +178,68 @@ def _run_iterate(case: dict[str, Any], base_url: str) -> Any:
     return [event.to_dict() for event in events]
 
 
+def _run_log(case: dict[str, Any], base_url: str) -> Any:
+    """Log every event, close, and report the keys and each post_send outcome."""
+    hooks = case["input"].get("hooks") or {}
+    outcomes: list[dict[str, Any]] = []
+
+    def post_send(event: santati.EventInput, outcome: santati.SendOutcome) -> None:
+        error = outcome.error
+        outcomes.append(
+            {
+                "event": json.loads(json.dumps(event)),
+                "status": outcome.status,
+                "id": outcome.id,
+                "error": None
+                if error is None
+                else {
+                    "kind": type(error).__name__,
+                    "status": error.status,
+                    "code": error.code,
+                    "field": error.field,
+                    "retry_after": error.retry_after,
+                },
+            }
+        )
+        if (hooks.get("post_send") or {}).get("raise"):
+            raise RuntimeError("conformance post_send")
+
+    extra: dict[str, Any] = {"post_send": post_send}
+    if "pre_send" in hooks:
+        spec = hooks["pre_send"]
+
+        def pre_send(event: santati.EventInput) -> santati.EventInput | None:
+            if spec.get("raise"):
+                raise RuntimeError("conformance pre_send")
+            if event["event"] in spec.get("drop_events", []):
+                return None
+            if "set_metadata" in spec:
+                return {**event, "metadata": {**event.get("metadata", {}), **spec["set_metadata"]}}
+            return event
+
+        extra["pre_send"] = pre_send
+
+    client = _open_client(case["input"], base_url, **extra)
+    keys: list[str] = []
+    error: santati.SantatiError | None = None
+    try:
+        for event in case["input"]["events"]:
+            keys.append(client.log(**event))
+    except santati.SantatiError as err:
+        error = err
+    finally:
+        client.close()
+    if error is not None:
+        raise error
+    return {"keys": keys, "outcomes": outcomes}
+
+
 RUNNERS: dict[str, Runner] = {
     "emit": _run_emit,
     "emit_batch": _run_emit_batch,
     "list": _run_list,
     "iterate": _run_iterate,
+    "log": _run_log,
 }
 
 

@@ -1,0 +1,12 @@
+"""Outbox stores for :meth:`santati.Santati.log`.
+
+:class:`MemoryOutbox` is the default; :mod:`santati.outbox.redis` holds the
+Redis Streams store (``pip install "santati[redis]"``). Implement
+:class:`OutboxStore` for anything else.
+"""
+
+from __future__ import annotations
+
+from .._outbox import MemoryOutbox, OutboxEntry, OutboxStore, SendOutcome
+
+__all__ = ["MemoryOutbox", "OutboxEntry", "OutboxStore", "SendOutcome"]

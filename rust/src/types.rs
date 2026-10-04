@@ -5,31 +5,38 @@
 
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+
 /// Who acted, as supplied to [`crate::Events::emit`].
 ///
 /// Only `type` is required; the server's ingest is the validator.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ActorInput {
     /// Actor kind: `user`, `system` or `anonymous`.
     pub r#type: String,
     /// The actor's id in the producer's own namespace.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// Human-readable actor name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Actor metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
 }
 
 /// One object an event acted on, as supplied to [`crate::Events::emit`].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TargetInput {
     /// Target kind, e.g. `invoice`.
     pub r#type: String,
     /// The target's id in the producer's own namespace.
     pub id: String,
     /// Human-readable target name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Target metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
 }
 
@@ -38,27 +45,36 @@ pub struct TargetInput {
 /// Absent members are omitted from the request; `null` is never sent. `trail`
 /// falls back to the client's default trail, and `idempotency_key` to a freshly
 /// generated lowercase UUIDv4.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct EventInput {
     /// The event type, e.g. `invoice.voided`.
     pub event: String,
     /// The audit log trail to index this event on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub trail: Option<String>,
     /// The end-customer organization this event belongs to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub organization_id: Option<String>,
     /// RFC 3339 with an offset, forwarded verbatim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>,
     /// Replay guard; generated when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub idempotency_key: Option<String>,
     /// Who acted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<ActorInput>,
     /// The objects the event acted on; at most 10.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub targets: Option<Vec<TargetInput>>,
     /// Event metadata.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
     /// The producer's own payload, stored verbatim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub data: Option<serde_json::Value>,
     /// Extra producer context, stored verbatim.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
@@ -120,7 +136,7 @@ pub struct EmitResult {
 }
 
 /// Why one batch item was rejected.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BatchItemError {
     /// The server's reserved failure code.
     pub code: String,

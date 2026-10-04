@@ -14,7 +14,11 @@
     },
     "require-dev": {
         "laravel/pint": "^1.20",
-        "phpunit/phpunit": "^11.5"
+        "phpunit/phpunit": "^11.5",
+        "predis/predis": "^2.2"
+    },
+    "suggest": {
+        "predis/predis": "Redis-backed outbox for Client::log() (Santati\\Outbox\\RedisOutbox)"
     },
     "autoload": {
         "psr-4": {

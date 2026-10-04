@@ -7,7 +7,11 @@ namespace Santati;
 use GuzzleHttp\Client as HttpClient;
 use Santati\Core\Api\AuditEventsApi;
 use Santati\Core\Configuration;
+use Santati\Exception\OutboxException;
 use Santati\Exception\ValidationException;
+use Santati\Outbox\MemoryOutbox;
+use Santati\Outbox\Outbox;
+use Santati\Outbox\OutboxStore;
 
 /**
  * A Santati API client: one API key, one generated core client.
@@ -32,6 +36,8 @@ final class Client
      */
     public readonly AuditEventsApi $api;
 
+    private readonly Outbox $outbox;
+
     /**
      * @param string                $apiKey           team API key (`sat_sk_…`), required and non-empty
      * @param string                $baseUrl          may carry a path prefix; a trailing slash is dropped
@@ -41,8 +47,12 @@ final class Client
      * @param int                   $initialBackoffMs backoff base
      * @param int                   $maxBackoffMs     backoff cap
      * @param array<string, string> $headers          extra headers on every request
+     * @param OutboxStore|null      $outbox           where `log()` keeps events; default `MemoryOutbox(10000)`
+     * @param int                   $batchSize        envelopes per outbox request, 1 to 500
+     * @param callable|null         $preSend          `fn (array $event): ?array`, return the event (maybe modified) or null to drop it
+     * @param callable|null         $postSend         `fn (array $event, SendOutcome $outcome): void`
      *
-     * @throws ValidationException on an empty $apiKey or an `authorization` header
+     * @throws ValidationException on an empty $apiKey, an `authorization` header or a $batchSize outside 1..500
      */
     public function __construct(
         string $apiKey,
@@ -53,6 +63,10 @@ final class Client
         int $initialBackoffMs = 250,
         int $maxBackoffMs = 8000,
         array $headers = [],
+        ?OutboxStore $outbox = null,
+        int $batchSize = 100,
+        ?callable $preSend = null,
+        ?callable $postSend = null,
     ) {
         if ($apiKey === '') {
             throw new ValidationException('api_key must not be empty', null, null, 'api_key');
@@ -62,6 +76,10 @@ final class Client
             if (strcasecmp((string) $name, 'authorization') === 0) {
                 throw new ValidationException("headers must not set 'authorization'", null, null, 'headers');
             }
+        }
+
+        if ($batchSize < 1 || $batchSize > 500) {
+            throw new ValidationException('batch_size must be between 1 and 500', null, null, 'batch_size');
         }
 
         $this->baseUrl = rtrim($baseUrl, '/');
@@ -86,6 +104,45 @@ final class Client
 
         $this->api = new AuditEventsApi($http, $config);
         $this->events = new Events($this);
+        $this->outbox = new Outbox($this->events, $outbox ?? new MemoryOutbox(), $batchSize, $preSend, $postSend);
+    }
+
+    /**
+     * Fire-and-forget emit: validates like `events->emit()`, stores the event
+     * in the outbox and returns its idempotency key. Never makes a request;
+     * `flush()`, `close()` or the end of the script send it.
+     *
+     * @param array<string, mixed> $event the same input as `events->emit()`
+     *
+     * @throws ValidationException on an invalid event
+     * @throws OutboxException     when the store refuses it, or the client is closed
+     */
+    public function log(array $event): string
+    {
+        return $this->outbox->log($this->events->prepare($event));
+    }
+
+    /**
+     * Runs one pass: sends everything stored in batches of `batchSize`.
+     * Send failures go through the delivery policy and `postSend`; only a
+     * failing store raises.
+     *
+     * @throws OutboxException when the store fails
+     */
+    public function flush(): void
+    {
+        $this->outbox->flush();
+    }
+
+    /**
+     * Flushes and marks the client closed; later `log()` calls raise
+     * `OutboxException` (`closed`). Calling it again does nothing.
+     *
+     * @throws OutboxException when the store fails
+     */
+    public function close(): void
+    {
+        $this->outbox->close();
     }
 
     public static function userAgent(): string

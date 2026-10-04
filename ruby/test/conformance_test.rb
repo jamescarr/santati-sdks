@@ -18,7 +18,8 @@ ERROR_KINDS = {
   "RateLimitedError" => Santati::RateLimitedError,
   "ServerError" => Santati::ServerError,
   "TransportError" => Santati::TransportError,
-  "ApiError" => Santati::ApiError
+  "ApiError" => Santati::ApiError,
+  "OutboxError" => Santati::OutboxError
 }.freeze
 
 # A real HTTP server standing in for the API: it answers every request with
@@ -99,9 +100,10 @@ class ConformanceTest < Minitest::Test
     with_gateway(input.fetch("gateway")) do |base_url, requests|
       result = nil
       error = nil
+      outcomes = []
       begin
-        client = build_client(input.fetch("client"), base_url)
-        result = perform(client, test_case.fetch("operation"), input)
+        client = build_client(input.fetch("client"), base_url, input["hooks"], outcomes)
+        result = perform(client, test_case.fetch("operation"), input, outcomes)
       rescue Santati::Error => e
         error = e
       end
@@ -136,7 +138,7 @@ class ConformanceTest < Minitest::Test
     end
   end
 
-  def build_client(spec, base_url)
+  def build_client(spec, base_url, hooks, outcomes)
     options = {
       api_key: spec.fetch("api_key"),
       base_url: base_url + spec.fetch("base_path", ""),
@@ -146,11 +148,48 @@ class ConformanceTest < Minitest::Test
     %w[timeout_ms max_retries initial_backoff_ms max_backoff_ms].each do |name|
       options[name.to_sym] = spec[name] if spec.key?(name)
     end
+    %w[batch_size flush_interval_ms].each do |name|
+      options[name.to_sym] = spec[name] if spec.key?(name)
+    end
+    options[:outbox] = Santati::MemoryOutbox.new(max_pending: spec["max_pending"]) if spec.key?("max_pending")
+    options[:pre_send] = pre_send_hook(hooks["pre_send"]) if hooks&.key?("pre_send")
+    options[:post_send] = post_send_hook(hooks&.dig("post_send"), outcomes)
     Santati::Client.new(**options)
   end
 
-  def perform(client, operation, input)
+  def pre_send_hook(spec)
+    lambda do |event|
+      raise "conformance pre_send" if spec["raise"]
+      next nil if spec.fetch("drop_events", []).include?(event[:event])
+      next event unless spec.key?("set_metadata")
+
+      event.merge(metadata: (event[:metadata] || {}).merge(spec["set_metadata"].transform_keys(&:to_sym)))
+    end
+  end
+
+  def post_send_hook(spec, outcomes)
+    lambda do |event, outcome|
+      error = outcome.error
+      outcomes << {
+        "event" => JSON.parse(JSON.generate(event)),
+        "status" => outcome.status,
+        "id" => outcome.id,
+        "error" => error && {
+          "kind" => ERROR_KINDS.key(error.class),
+          "status" => error.status,
+          "code" => error.code,
+          "field" => error.field,
+          "retry_after" => error.retry_after
+        }
+      }
+      raise "conformance post_send" if spec && spec["raise"]
+    end
+  end
+
+  def perform(client, operation, input, outcomes)
     case operation
+    when "log"
+      log_ok(client, input.fetch("events"), outcomes)
     when "emit"
       emit_ok(client.events.emit(**symbolize(input.fetch("event"))))
     when "emit_batch"
@@ -162,6 +201,23 @@ class ConformanceTest < Minitest::Test
     else
       raise "unknown operation #{operation.inspect}"
     end
+  end
+
+  # Logs every event, then closes the client; an SDK error stops the logging
+  # and is raised once the client is closed.
+  def log_ok(client, events, outcomes)
+    keys = []
+    error = nil
+    begin
+      events.each { |event| keys << client.log(**symbolize(event)) }
+    rescue Santati::Error => e
+      error = e
+    ensure
+      client.close
+    end
+    raise error if error
+
+    {"keys" => keys, "outcomes" => outcomes}
   end
 
   def emit_ok(result)

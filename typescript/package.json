@@ -13,6 +13,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./redis": {
+      "types": "./dist/redis.d.ts",
+      "default": "./dist/redis.js"
     }
   },
   "files": [
@@ -33,8 +37,17 @@
     "conformance": "node --import tsx --test src/conformance/conformance.test.ts",
     "prepublishOnly": "npm run build"
   },
+  "peerDependencies": {
+    "ioredis": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "ioredis": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "ioredis": "^5.4.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.3"
   }

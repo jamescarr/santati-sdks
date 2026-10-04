@@ -1,5 +1,6 @@
 //! The client and its builder: transport, options and shared request plumbing.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue, AUTHORIZATION};
@@ -8,7 +9,11 @@ use reqwest::Client as HttpClient;
 
 use crate::error::Error;
 use crate::events::Events;
+use crate::outbox::{
+    self, MemoryOutbox, OutboxConfig, OutboxState, OutboxStore, SendOutcome, WorkerGuard,
+};
 use crate::retry::RetryPolicy;
+use crate::types::EventInput;
 
 /// The API origin used when `base_url` is not set.
 pub const DEFAULT_BASE_URL: &str = "https://api.santati.io";
@@ -36,6 +41,8 @@ pub struct Santati {
     max_retries: u32,
     initial_backoff: Duration,
     max_backoff: Duration,
+    outbox: Arc<OutboxState>,
+    _guard: Option<Arc<WorkerGuard>>,
 }
 
 impl Santati {
@@ -47,6 +54,46 @@ impl Santati {
     /// The event operations.
     pub fn events(&self) -> Events<'_> {
         Events::new(self)
+    }
+
+    /// Fire-and-forget emit: validate like [`Events::emit`], store the resolved
+    /// envelope in the outbox and return its idempotency key. Never makes a
+    /// request; the background worker (started on the first call) sends it.
+    ///
+    /// Must be called inside a Tokio runtime. Returns [`Error::Outbox`] with
+    /// code `closed` after [`Santati::close`], `outbox_full` when a bounded
+    /// store is full, and `store_unavailable` for any other store failure.
+    pub async fn log(&self, event: EventInput) -> Result<String, Error> {
+        outbox::log(self, event).await
+    }
+
+    /// Run one outbox pass now: claim, send and acknowledge batches until the
+    /// outbox is empty or a batch is released for a later pass.
+    ///
+    /// Send failures never fail the call; they are reported through
+    /// `post_send`. Returns [`Error::Outbox`] (`store_unavailable`) when the
+    /// store fails.
+    pub async fn flush(&self) -> Result<(), Error> {
+        outbox::flush(self).await
+    }
+
+    /// Stop the worker, wait for a pass in progress, then [`Santati::flush`].
+    /// Idempotent: later calls return `Ok(())` at once. After `close`, `log`
+    /// fails with [`Error::Outbox`] code `closed`.
+    pub async fn close(&self) -> Result<(), Error> {
+        outbox::close(self).await
+    }
+
+    /// A copy for the worker task: it must not count as a user handle.
+    pub(crate) fn without_guard(&self) -> Santati {
+        Santati {
+            _guard: None,
+            ..self.clone()
+        }
+    }
+
+    pub(crate) fn outbox_state(&self) -> &Arc<OutboxState> {
+        &self.outbox
     }
 
     /// The origin every request goes to, trailing `/` removed.
@@ -106,6 +153,7 @@ pub struct Builder {
     initial_backoff: Duration,
     max_backoff: Duration,
     headers: Vec<(String, String)>,
+    outbox: OutboxConfig,
 }
 
 impl Builder {
@@ -119,6 +167,7 @@ impl Builder {
             initial_backoff: Duration::from_millis(DEFAULT_INITIAL_BACKOFF_MS),
             max_backoff: Duration::from_millis(DEFAULT_MAX_BACKOFF_MS),
             headers: Vec::new(),
+            outbox: OutboxConfig::default(),
         }
     }
 
@@ -159,13 +208,68 @@ impl Builder {
         self
     }
 
+    /// The [`OutboxStore`] [`Santati::log`] writes to; default is a
+    /// [`MemoryOutbox`] of 10 000 entries.
+    pub fn outbox(mut self, store: impl OutboxStore + 'static) -> Builder {
+        self.outbox.store = Some(Arc::new(store));
+        self
+    }
+
+    /// Envelopes per outbox request, `1..=500`; default 100.
+    pub fn batch_size(mut self, batch_size: usize) -> Builder {
+        self.outbox.batch_size = batch_size;
+        self
+    }
+
+    /// The outbox worker's tick, greater than zero; default one second.
+    pub fn flush_interval(mut self, interval: Duration) -> Builder {
+        self.outbox.flush_interval = interval;
+        self
+    }
+
+    /// A hook called on each stored event right before its batch request:
+    /// return the event (possibly modified) to send it, `None` to drop it. A
+    /// panic leaves the event in the outbox and reports a `failed` outcome
+    /// with an `hook_failed` [`Error::Outbox`].
+    pub fn pre_send(
+        mut self,
+        hook: impl Fn(EventInput) -> Option<EventInput> + Send + Sync + 'static,
+    ) -> Builder {
+        self.outbox.pre_send = Some(Arc::new(hook));
+        self
+    }
+
+    /// A hook called with each event's stored form and its [`SendOutcome`].
+    /// Panics in it are caught and ignored.
+    pub fn post_send(
+        mut self,
+        hook: impl Fn(&EventInput, &SendOutcome) + Send + Sync + 'static,
+    ) -> Builder {
+        self.outbox.post_send = Some(Arc::new(hook));
+        self
+    }
+
     /// Validate the options and build the client.
     ///
     /// Returns a [`Error::Validation`] (status `None`) for an empty `api_key`
-    /// (field `api_key`) or a header named `Authorization` (field `headers`).
+    /// (field `api_key`), a header named `Authorization` (field `headers`), a
+    /// `batch_size` outside `1..=500` (field `batch_size`) or a zero
+    /// `flush_interval` (field `flush_interval_ms`).
     pub fn build(self) -> Result<Santati, Error> {
         if self.api_key.is_empty() {
             return Err(Error::validation("api_key", "api_key must not be empty"));
+        }
+        if !(1..=500).contains(&self.outbox.batch_size) {
+            return Err(Error::validation(
+                "batch_size",
+                "batch_size must be between 1 and 500",
+            ));
+        }
+        if self.outbox.flush_interval.is_zero() {
+            return Err(Error::validation(
+                "flush_interval_ms",
+                "flush_interval_ms must be greater than 0",
+            ));
         }
 
         let mut headers = HeaderMap::new();
@@ -199,6 +303,18 @@ impl Builder {
                 Error::transport(format!("could not build the HTTP client: {error}"))
             })?;
 
+        let outbox = match self.outbox.store {
+            Some(store) => store,
+            None => Arc::new(MemoryOutbox::new(outbox::DEFAULT_MAX_PENDING)?),
+        };
+        let outbox = OutboxState::new(
+            outbox,
+            self.outbox.batch_size,
+            self.outbox.flush_interval,
+            self.outbox.pre_send,
+            self.outbox.post_send,
+        );
+
         Ok(Santati {
             http,
             base_url: self.base_url.trim_end_matches('/').to_string(),
@@ -207,6 +323,8 @@ impl Builder {
             max_retries: self.max_retries,
             initial_backoff: self.initial_backoff,
             max_backoff: self.max_backoff,
+            _guard: Some(Arc::new(WorkerGuard(outbox.clone()))),
+            outbox,
         })
     }
 }

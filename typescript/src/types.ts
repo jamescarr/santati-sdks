@@ -84,3 +84,41 @@ export interface EventPage {
   results: AuditEvent[];
   nextCursor: string | null;
 }
+
+/** One entry an `OutboxStore` hands to the worker: its store id and the stored event. */
+export interface OutboxEntry {
+  id: string;
+  event: EventInput;
+}
+
+/**
+ * Where `log` keeps events until the worker sends them. Methods may be
+ * synchronous or return a promise. Stored events carry `trail` and
+ * `idempotencyKey`; use `envelopeToWire` / `envelopeFromWire` to serialize them.
+ */
+export interface OutboxStore {
+  /** Stores at the tail; throws `OutboxError` (`outbox_full`) or any error. */
+  enqueue(event: EventInput): void | Promise<void>;
+  /** Up to `limit` oldest entries, FIFO; claimed entries are not returned again until released. */
+  claim(limit: number): OutboxEntry[] | Promise<OutboxEntry[]>;
+  /** Deletes permanently. */
+  ack(ids: string[]): void | Promise<void>;
+  /** Makes entries eligible for a later claim. */
+  release(ids: string[]): void | Promise<void>;
+}
+
+export type SendStatus = "accepted" | "duplicate" | "rejected" | "failed";
+
+/** What happened to one event in one attempt; passed to `postSend`. */
+export interface SendOutcome {
+  status: SendStatus;
+  id?: string;
+  error?: import("./errors.js").SantatiError;
+}
+
+/** Return the event (possibly modified) to send it; `null` or `undefined` drops it. */
+export type PreSendHook = (
+  event: EventInput,
+) => EventInput | null | undefined | Promise<EventInput | null | undefined>;
+
+export type PostSendHook = (event: EventInput, outcome: SendOutcome) => void | Promise<void>;
