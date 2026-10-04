@@ -327,10 +327,7 @@ defmodule Santati.Outbox do
   defp send_events(state, to_send, released) do
     ids = Enum.map(to_send, fn {entry, _out} -> entry.id end)
 
-    case Events.emit_batch_with_status(
-           state.client,
-           Enum.map(to_send, fn {_entry, out} -> out end)
-         ) do
+    case emit(state.client, Enum.map(to_send, fn {_entry, out} -> out end)) do
       {:ok, result, status} ->
         sent = List.to_tuple(to_send)
 
@@ -350,6 +347,15 @@ defmodule Santati.Outbox do
 
         if retryable?(error), do: {[], Enum.into(ids, released)}, else: {ids, released}
     end
+  end
+
+  # E.g. a malformed :pre_send result: a failed, non-retryable outcome instead of a crashed Task.
+  defp emit(client, events) do
+    Events.emit_batch_with_status(client, events)
+  rescue
+    error -> {:error, Errors.outbox("hook_failed", Exception.message(error))}
+  catch
+    kind, reason -> {:error, Errors.outbox("hook_failed", Exception.format_banner(kind, reason))}
   end
 
   defp retryable?(%Santati.TransportError{}), do: true

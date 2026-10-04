@@ -107,9 +107,11 @@ path: `ValidationError` field `event` / `trail`), resolves `trail` (the
 event's, else the client's) and `idempotency_key` (the caller's, else a fresh
 lowercase UUIDv4), then `enqueue`s the *stored event* — the facade's
 `EventInput` shape with `trail` and `idempotency_key` filled in, identical to
-the wire envelope (snake_case) when serialized — and returns the key. **`log`
-never makes a request.** It starts the [worker](#worker) if it is not running
-(lazily, on the first `log`).
+the wire envelope (snake_case) when serialized — and returns the key. The
+stored event is a snapshot: changing the caller's objects (`metadata`,
+`actor`, `targets`, `data`, `context`) after `log` returns does not change it.
+**`log` never makes a request.** It starts the [worker](#worker) if it is not
+running (lazily, on the first `log`).
 
 Store failures surface as `OutboxError` (status null): a full memory outbox →
 `code = "outbox_full"`; any other store failure (connection refused, …) →
@@ -215,6 +217,9 @@ pass():
         for (entry, _) in to_send: post_send(entry.event, {status: failed, error: e})
         if e is TransportError | ServerError | RateLimitedError: store.release(ids of to_send); released = true
         else: store.ack(ids of to_send)                                     # non-retryable: dropped
+      except any other exception x:                                         # e.g. emit_batch rejecting a malformed pre_send result
+        for (entry, _) in to_send: post_send(entry.event, {status: failed, error: OutboxError(code "hook_failed", message: text of x)})
+        store.ack(ids of to_send)                                           # non-retryable: dropped; never raised from flush()/close()
       else:
         for item in result.results (in order):
           post_send(to_send[item.index].entry.event, outcome(item))

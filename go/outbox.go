@@ -119,7 +119,8 @@ func (c *Client) Log(ctx context.Context, input EventInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	stored := input
+	// A snapshot, so later changes to the caller's maps and slices do not reach the stored event.
+	stored := cloneEvent(input)
 	stored.Trail = envelope.Trail
 	stored.IdempotencyKey = key
 
@@ -321,8 +322,9 @@ func outcomeFor(item BatchItem, status int) SendOutcome {
 	return SendOutcome{Status: SendStatus(item.Status), ID: item.ID}
 }
 
-// cloneEvent deep-copies the reference members of an event so a hook that
-// mutates its argument in place cannot change the stored original.
+// cloneEvent deep-copies the reference members of an event so neither the
+// caller of Log nor a hook that mutates its argument in place can change the
+// stored original.
 func cloneEvent(e EventInput) EventInput {
 	if e.Actor != nil {
 		actor := *e.Actor

@@ -14,6 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   background in batches of `batch_size` every `flush_interval_ms`, with
   `pre_send`/`post_send` hooks, `Santati.flush()`, and `OutboxError`.
   `close()` now stops the worker and flushes the outbox first.
+  `log()` stores a copy of the event; a batch that fails with anything but a
+  `SantatiError` (e.g. a malformed `pre_send` result) is reported to
+  `post_send` as `OutboxError` `hook_failed` and dropped, never raised.
 
 ### Fixed
 

@@ -170,6 +170,17 @@ final class Outbox
 
                     $result = null;
                     $status = 0;
+                } catch (\Throwable $e) {
+                    // E.g. a malformed preSend result: reported and dropped, never thrown from flush()/close().
+                    $failure = OutboxException::with('hook_failed', $e->getMessage(), $e);
+
+                    foreach ($toSend as [$entry]) {
+                        $this->notify($entry->event, new SendOutcome('failed', null, $failure));
+                    }
+
+                    $this->guard(fn () => $this->store->ack($ids));
+                    $result = null;
+                    $status = 0;
                 }
 
                 if ($result !== null) {

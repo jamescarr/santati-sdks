@@ -188,17 +188,22 @@ export class OutboxWorker {
           sent = await this.events.emitBatchWithStatus(toSend.map(({ out }) => out));
         } catch (error) {
           if (!(error instanceof SantatiError)) {
-            await this.guard(() => this.store.release(ids));
-            throw error;
-          }
-          for (const { entry } of toSend) {
-            await this.notify(entry.event, { status: "failed", error });
-          }
-          if (retryable(error)) {
-            await this.guard(() => this.store.release(ids));
-            released = true;
-          } else {
+            // E.g. a malformed preSend result: reported and dropped, never thrown from flush()/close().
+            const failure = new OutboxError(messageOf(error), { code: "hook_failed" });
+            for (const { entry } of toSend) {
+              await this.notify(entry.event, { status: "failed", error: failure });
+            }
             await this.guard(() => this.store.ack(ids));
+          } else {
+            for (const { entry } of toSend) {
+              await this.notify(entry.event, { status: "failed", error });
+            }
+            if (retryable(error)) {
+              await this.guard(() => this.store.release(ids));
+              released = true;
+            } else {
+              await this.guard(() => this.store.ack(ids));
+            }
           }
         }
         if (sent !== undefined) {

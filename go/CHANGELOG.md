@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via `redisoutbox`), background batching, `WithPreSend`/`WithPostSend` hooks, `Flush()`/`Close()`.
+- `Log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via `redisoutbox`), background batching, `WithPreSend`/`WithPostSend` hooks, `Flush()`/`Close()`. `Log()` stores a copy of the event's maps and slices.
 
 ## [0.1.0] - 2026-10-01
 

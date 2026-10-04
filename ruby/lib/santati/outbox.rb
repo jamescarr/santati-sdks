@@ -88,6 +88,8 @@ module Santati
     def log(event)
       raise OutboxError.new("the client is closed", code: "closed") if @closed
 
+      # A snapshot, so later changes to the caller's objects do not reach the stored event.
+      event = Marshal.load(Marshal.dump(event))
       guard { @store.enqueue(event) }
       start_worker
       event.fetch(:idempotency_key)
@@ -180,6 +182,11 @@ module Santati
           guard { @store.release(ids) }
           return true
         end
+        guard { @store.ack(ids) }
+        return false
+      rescue => e # e.g. a malformed pre_send result: reported and dropped, never raised
+        failure = OutboxError.new(e.message, code: "hook_failed")
+        to_send.each { |entry, _| notify(entry.event, SendOutcome.new(status: "failed", error: failure)) }
         guard { @store.ack(ids) }
         return false
       end

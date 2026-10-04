@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `Santati.log/2`: fire-and-forget emit through a supervised `Santati.Outbox` process (in-memory by default, Redis adapter via `Santati.Outbox.Redis` and the optional `redix` dependency), background batching, `pre_send`/`post_send` hooks, `Santati.flush/1` and `Santati.Outbox.stop/1` (flushes on terminate).
+- `Santati.log/2`: fire-and-forget emit through a supervised `Santati.Outbox` process (in-memory by default, Redis adapter via `Santati.Outbox.Redis` and the optional `redix` dependency), background batching, `pre_send`/`post_send` hooks, `Santati.flush/1` and `Santati.Outbox.stop/1` (flushes on terminate). A batch whose send raises (e.g. on a malformed `pre_send` result) is reported to `post_send` as `Santati.OutboxError` `hook_failed` and dropped instead of crashing the process.
 
 ## [0.1.0] - 2026-10-01
 

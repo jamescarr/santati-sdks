@@ -474,7 +474,8 @@ export class Santati {
   async log(input: EventInput): Promise<string> {
     const key = input.idempotencyKey ?? crypto.randomUUID();
     const envelope = buildEnvelope(this.config.trail, input, "", key);
-    return this.outbox.log({ ...input, trail: envelope.trail, idempotencyKey: key });
+    // A snapshot, so later changes to the caller's objects do not reach the stored event.
+    return this.outbox.log(structuredClone({ ...input, trail: envelope.trail, idempotencyKey: key }));
   }
 
   /** Runs one outbox pass now. Rejects with `OutboxError` if the store fails. */

@@ -149,6 +149,8 @@ class _Outbox:
         self._closed = False
 
     def log(self, event: EventInput) -> str:
+        # A snapshot, so later changes to the caller's objects do not reach the stored event.
+        event = copy.deepcopy(event)
         with self._state:
             if self._closed:
                 raise OutboxError("the client is closed", code="closed")
@@ -235,12 +237,15 @@ class _Outbox:
                 return True
             self._call(self._store.ack, ids)
             return False
-        except Exception:
-            # Never strand claimed entries in the store.
-            self._call(self._store.release, ids)
-            raise
+        except Exception as err:  # noqa: BLE001 - e.g. a malformed pre_send result; reported, never raised
+            failure = OutboxError(str(err), code="hook_failed")
+            for entry, _ in to_send:
+                self._notify(entry.event, SendOutcome("failed", error=failure))
+            self._call(self._store.ack, ids)
+            return False
         for item in result.results:
-            self._notify(to_send[item.index][0].event, _outcome(item, status))
+            if 0 <= item.index < len(to_send):
+                self._notify(to_send[item.index][0].event, _outcome(item, status))
         self._call(self._store.ack, ids)
         return False
 
