@@ -21,7 +21,9 @@ defmodule Santati do
   background worker sends it in batches (see `Santati.Outbox`).
 
   Every call answers `{:ok, result}` or `{:error, exception}`; `stream/2`
-  raises the exception of the page that failed.
+  raises the exception of the page that failed, and an event JSON cannot
+  represent (a tuple, a pid or a reference) raises `Protocol.UndefinedError`
+  from `Santati.Events.emit/2`, `emit_batch/2` and `log/2`.
   """
 
   alias Santati.Client
