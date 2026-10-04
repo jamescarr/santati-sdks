@@ -227,7 +227,7 @@ class _Outbox:
         """Send one batch and settle its entries; ``True`` when they were released."""
         ids = [entry.id for entry, _ in to_send]
         try:
-            status, result = self._client.events._emit_batch([out for _, out in to_send])
+            status, result = self._client.events._emit_batch([out for _, out in to_send], retries=False)
         except SantatiError as err:
             for entry, _ in to_send:
                 self._notify(entry.event, SendOutcome("failed", error=err))

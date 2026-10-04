@@ -32,5 +32,9 @@ libtest-mimic = "0.8"
 name = "conformance"
 harness = false
 
+[[test]]
+name = "chaos"
+harness = false
+
 [features]
 redis = ["dep:redis"]

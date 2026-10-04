@@ -1,0 +1,9 @@
+{"sdks": {
+  "python":     {"setup": [["uv", "sync", "--locked"]],                                          "run": ["uv", "run", "python", "tests/chaos_driver.py"],                                      "profile": "threaded"},
+  "typescript": {"setup": [["npm", "ci"]],                                                       "run": ["node", "--import", "tsx", "src/chaos/driver.ts"],                                     "profile": "threaded"},
+  "go":         {"setup": [],                                                                     "run": ["go", "test", "-tags", "chaos", "-run", "^TestChaos$", "-count=1", "-v", "."],         "profile": "threaded"},
+  "rust":       {"setup": [],                                                                     "run": ["cargo", "test", "--release", "--locked", "--test", "chaos"],                          "profile": "threaded"},
+  "elixir":     {"setup": [["mix", "deps.get"]],                                                  "run": ["mix", "run", "test/chaos_driver.exs"],                                                 "profile": "threaded"},
+  "ruby":       {"setup": [["bundle", "install"]],                                                "run": ["bundle", "exec", "ruby", "-Ilib", "test/chaos_driver.rb"],                             "profile": "threaded"},
+  "php":        {"setup": [["composer", "install", "--no-interaction", "--no-progress"]],         "run": ["php", "tests/chaos_driver.php"],                                                      "profile": "php"}
+}}

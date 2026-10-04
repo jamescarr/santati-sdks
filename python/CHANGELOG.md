@@ -17,7 +17,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   first. A queued `emit` stores a copy of the event; a batch that fails with
   anything but a `SantatiError` (e.g. a malformed `pre_send` result) is
   reported to `post_send` as `OutboxError` `hook_failed` and dropped, never
-  raised.
+  raised. Each batch is sent once, without `max_retries`: a retryable failure releases it for the next pass.
 
 ### Changed
 

@@ -233,8 +233,8 @@ class Events:
         """Index up to 500 events in one request, one generated key per item."""
         return self._emit_batch(events)[1]
 
-    def _emit_batch(self, events: Sequence[EventInput]) -> tuple[int, BatchResult]:
-        """:meth:`emit_batch`, plus the response status (202 or 207) the outbox reports."""
+    def _emit_batch(self, events: Sequence[EventInput], *, retries: bool = True) -> tuple[int, BatchResult]:
+        """:meth:`emit_batch`, plus the response status (202 or 207) the outbox reports; ``retries=False`` sends once."""
         if not events:
             raise ValidationError("events must not be empty", field="events")
         envelopes = [
@@ -275,7 +275,7 @@ class Events:
                 )
             raise _error_from_response(status, headers, raw)
 
-        return self._client._retry.run(attempt)
+        return self._client._retry.run(attempt) if retries else attempt()
 
     def list(
         self,

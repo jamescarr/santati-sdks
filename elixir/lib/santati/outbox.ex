@@ -11,10 +11,11 @@ defmodule Santati.Outbox do
   to `:batch_size` entries, runs `:pre_send` on each, sends the survivors
   through `Santati.Events.emit_batch/2` (in a `Task`, so `emit/2` is never
   blocked by a slow request), reports one `:post_send` call per event and
-  acknowledges what was sent. A batch that fails with a
-  `Santati.TransportError`, `Santati.ServerError` or
-  `Santati.RateLimitedError` is released and the pass ends; any other failure
-  drops the batch.
+  acknowledges what was sent. A pass sends each batch once: the client's
+  `:max_retries` does not apply, and a released batch is retried by a later
+  pass. A batch that fails with a `Santati.TransportError`,
+  `Santati.ServerError` or `Santati.RateLimitedError` is released and the pass
+  ends; any other failure drops the batch.
 
       children = [
         {Santati.Outbox, client: client, name: MyApp.Santati, batch_size: 100}
@@ -42,6 +43,9 @@ defmodule Santati.Outbox do
   `terminate/2`; that is the equivalent of `close()` in the other SDKs. An
   `emit/2` through a client whose `:outbox` names the stopped server exits the
   caller like any dead `GenServer`.
+
+  `flush/2` runs its pass in the same `Task`; the server keeps accepting queued
+  emits while it waits.
   """
 
   use GenServer
@@ -57,7 +61,9 @@ defmodule Santati.Outbox do
     :pre_send,
     :post_send,
     timer: nil,
-    inflight: nil
+    inflight: nil,
+    serving: [],
+    pending: []
   ]
 
   @doc false
@@ -156,12 +162,14 @@ defmodule Santati.Outbox do
     end
   end
 
-  def handle_call(:flush, _from, state) do
-    case settle(state) do
-      {:ok, state} -> {:reply, :ok, arm(state)}
-      {:error, error, state} -> {:reply, {:error, error}, arm(state)}
-    end
-  end
+  # A flush starts a pass at once when the server is idle; otherwise it waits
+  # for the pass in flight and then gets a fresh one of its own. The reply goes
+  # out from `pass_ended/2`, so the server stays free to enqueue meanwhile.
+  def handle_call(:flush, from, %{inflight: nil} = state),
+    do: {:noreply, tick(%{state | serving: [from]})}
+
+  def handle_call(:flush, from, state),
+    do: {:noreply, %{state | pending: [from | state.pending]}}
 
   @impl true
   def handle_info(:tick, state), do: {:noreply, tick(%{state | timer: nil})}
@@ -174,8 +182,8 @@ defmodule Santati.Outbox do
     state = %{state | inflight: nil}
 
     case finish(state, ack_ids, release_ids) do
-      {:ok, state} -> {:noreply, if(continue?, do: tick(state), else: arm(state))}
-      {:error, _error, state} -> {:noreply, arm(state)}
+      {:ok, state} -> {:noreply, if(continue?, do: tick(state), else: pass_ended(state, :ok))}
+      {:error, error, state} -> {:noreply, pass_ended(state, {:error, error})}
     end
   end
 
@@ -186,8 +194,8 @@ defmodule Santati.Outbox do
     state = %{state | inflight: nil}
 
     case finish(state, [], flight.ids) do
-      {:ok, state} -> {:noreply, arm(state)}
-      {:error, _error, state} -> {:noreply, arm(state)}
+      {:ok, state} -> {:noreply, pass_ended(state, :ok)}
+      {:error, error, state} -> {:noreply, pass_ended(state, {:error, error})}
     end
   end
 
@@ -201,23 +209,42 @@ defmodule Santati.Outbox do
     _error -> :ok
   end
 
-  # One tick: claim a batch and send it in a task. Store failures are swallowed;
-  # the next tick retries.
+  # One tick: claim a batch and send it in a task. Store failures end the pass;
+  # only a flush caller is told (`serving`), the next tick retries.
   defp tick(%{inflight: nil} = state) do
-    case store(state, :claim, [state.batch_size]) do
-      {:ok, [], state} ->
-        arm(state)
-
-      {:ok, entries, state} ->
-        task = Task.async(fn -> send_batch(state, entries) end)
-        %{state | inflight: %{ref: task.ref, ids: Enum.map(entries, & &1.id)}}
-
-      {:error, _error, state} ->
-        arm(state)
+    case launch(state) do
+      {:sent, state} -> state
+      {:empty, state} -> pass_ended(state, :ok)
+      {:error, error, state} -> pass_ended(state, {:error, error})
     end
   end
 
   defp tick(state), do: state
+
+  defp launch(state) do
+    case store(state, :claim, [state.batch_size]) do
+      {:ok, [], state} ->
+        {:empty, state}
+
+      {:ok, entries, state} ->
+        task = Task.async(fn -> send_batch(state, entries) end)
+        {:sent, %{state | inflight: %{ref: task.ref, ids: Enum.map(entries, & &1.id)}}}
+
+      {:error, error, state} ->
+        {:error, error, state}
+    end
+  end
+
+  # A pass is over: answer the flush callers it served, then start the fresh
+  # pass the callers who arrived meanwhile are owed, or re-arm the timer.
+  defp pass_ended(state, reply) do
+    Enum.each(state.serving, &GenServer.reply(&1, reply))
+
+    case state.pending do
+      [] -> arm(%{state | serving: []})
+      pending -> tick(%{state | serving: pending, pending: []})
+    end
+  end
 
   # Waits for a batch in flight, then runs passes inline until one ends.
   defp settle(state) do
@@ -350,7 +377,7 @@ defmodule Santati.Outbox do
 
   # E.g. a malformed :pre_send result: a failed, non-retryable outcome instead of a crashed Task.
   defp emit(client, events) do
-    Events.emit_batch_with_status(client, events)
+    Events.emit_batch_with_status(%{client | max_retries: 0}, events)
   rescue
     error -> {:error, Errors.outbox("hook_failed", Exception.message(error))}
   catch

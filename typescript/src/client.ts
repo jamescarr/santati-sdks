@@ -379,9 +379,10 @@ export class Events {
     return (await this.emitBatchWithStatus(events)).result;
   }
 
-  /** `emitBatch` plus the response's HTTP status (202 or 207). Used by the outbox worker. @internal */
+  /** `emitBatch` plus the response's HTTP status (202 or 207). Used by the outbox worker, which sends once (`retries = false`). @internal */
   async emitBatchWithStatus(
     events: EventInput[],
+    retries = true,
   ): Promise<{ result: BatchResult; status: number }> {
     if (events.length === 0) {
       throw new ValidationError("events must not be empty", { field: "events" });
@@ -394,7 +395,7 @@ export class Events {
         this.send(() =>
           this.api.eventsCreateRaw({ eventIngestRequest: { events: envelopes } }, this.init()),
         ),
-      this.config,
+      retries ? this.config : { ...this.config, maxRetries: 0 },
     );
     if (raw.status !== 202 && raw.status !== 207) throw unexpected(raw);
     const result: EventBatchResult = decodeJson(raw, EventBatchResultFromJSON);

@@ -55,6 +55,12 @@ func (e *Events) Emit(ctx context.Context, input EventInput) (*EmitResult, error
 // results. It validates every item before sending; the first failure is
 // reported with its field ("events[<i>].event" or "events[<i>].trail").
 func (e *Events) EmitBatch(ctx context.Context, events []EventInput) (*BatchResult, error) {
+	return e.emitBatch(ctx, events, true)
+}
+
+// emitBatch is EmitBatch; with retries false it sends once, which is how the
+// outbox sends: a retryable failure releases the batch for a later pass.
+func (e *Events) emitBatch(ctx context.Context, events []EventInput, retries bool) (*BatchResult, error) {
 	if len(events) == 0 {
 		return nil, validationError("events", "events must not be empty")
 	}
@@ -69,7 +75,11 @@ func (e *Events) EmitBatch(ctx context.Context, events []EventInput) (*BatchResu
 	}
 	request := e.client.api.AuditEventsAPI.EventsCreate(e.client.authorize(ctx)).
 		EventIngestRequest(core.EventBatchRequestAsEventIngestRequest(&core.EventBatchRequest{Events: envelopes}))
-	return run(ctx, e.client, func() (*BatchResult, error) {
+	maxRetries := 0
+	if retries {
+		maxRetries = e.client.maxRetries
+	}
+	return runAttempts(ctx, e.client, maxRetries, func() (*BatchResult, error) {
 		return e.client.batchOnce(request)
 	})
 }

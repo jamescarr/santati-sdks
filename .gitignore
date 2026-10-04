@@ -16,3 +16,4 @@ ruby/*.gem
 php/vendor/
 php/.phpunit.cache/
 erl_crash.dump
+chaos/.results/

@@ -111,7 +111,13 @@ outbox and returns at once with `queued` true and a null `event`, without making
 a request. `flush()` sends what is stored in batches (`batchSize`, default 100)
 through `events->emitBatch()`; `close()` flushes and closes the client, and the
 end of the script flushes anything still pending. PHP has no background worker,
-so nothing is sent before one of those.
+so nothing is sent before one of those. Each batch is sent once, without the
+client's retries: a retryable failure leaves the batch in the outbox for the
+next `flush()`, so one flush waits at most one `timeoutMs` per batch.
+
+Under PHP-FPM, pass `finishRequestBeforeFlush: true` and the end-of-script flush
+first calls `fastcgi_finish_request()`, so the response reaches the client
+before the flush runs. `flush()` and `close()` called explicitly never do.
 
 ```php
 $client = new Client(

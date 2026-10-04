@@ -9,9 +9,9 @@ module Santati
     module_function
 
     # Runs the block, retrying a retryable {Santati::Error} up to
-    # `client.max_retries` times. The block must send an identical request on
-    # every attempt.
-    def call(client, &block)
+    # `max_retries` times (the client's by default; 0 sends once). The block
+    # must send an identical request on every attempt.
+    def call(client, max_retries: client.max_retries, &block)
       attempts = 0
       loop do
         attempts += 1
@@ -19,7 +19,7 @@ module Santati
           return block.call
         rescue Error => e
           raise unless retryable?(e)
-          raise if attempts > client.max_retries
+          raise if attempts > max_retries
 
           wait = backoff_ms(client, e, attempts)
           raise if wait == :stop

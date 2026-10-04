@@ -70,9 +70,11 @@ module Santati
     end
 
     # Like {#emit_batch}, but returns `[http_status, BatchResult]` (202 or 207).
+    # With `retries: false` the request is sent once, which is how the outbox
+    # sends: a retryable failure releases the batch for a later pass.
     #
     # @api private
-    def emit_batch_with_status(events)
+    def emit_batch_with_status(events, retries: true)
       events = Array(events)
       raise ValidationError.new("events must be a non-empty list", field: "events") if events.empty?
 
@@ -91,7 +93,7 @@ module Santati
         )
       end
 
-      Retry.call(@client) do
+      Retry.call(@client, max_retries: retries ? @client.max_retries : 0) do
         body, status = generated { @client.api.events_create_with_http_info(request, debug_return_type: "String") }
         case status
         when 202, 207 then [status, decode_batch(body, status)]

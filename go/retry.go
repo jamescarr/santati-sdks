@@ -8,9 +8,15 @@ import (
 )
 
 // run calls operation until it succeeds, the error is not retryable, the
-// attempts are exhausted, or the context is cancelled. Every attempt sends the
-// identical request, so generated idempotency keys and bodies are stable.
+// client's attempts are exhausted, or the context is cancelled. Every attempt
+// sends the identical request, so generated idempotency keys and bodies are
+// stable.
 func run[T any](ctx context.Context, c *Client, operation func() (T, error)) (T, error) {
+	return runAttempts(ctx, c, c.maxRetries, operation)
+}
+
+// runAttempts is run with an explicit retry budget: maxRetries 0 sends once.
+func runAttempts[T any](ctx context.Context, c *Client, maxRetries int, operation func() (T, error)) (T, error) {
 	var zero T
 	for attempt := 1; ; attempt++ {
 		value, err := operation()
@@ -18,7 +24,7 @@ func run[T any](ctx context.Context, c *Client, operation func() (T, error)) (T,
 			return value, nil
 		}
 		var sdkErr *Error
-		if !errors.As(err, &sdkErr) || attempt > c.maxRetries || !retryable(sdkErr) {
+		if !errors.As(err, &sdkErr) || attempt > maxRetries || !retryable(sdkErr) {
 			return zero, err
 		}
 		delay, stop := c.retryDelay(attempt, sdkErr)

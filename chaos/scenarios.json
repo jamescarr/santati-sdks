@@ -1,0 +1,67 @@
+{
+  "defaults": {
+    "client": {
+      "timeout_ms": 2000,
+      "max_retries": 2,
+      "initial_backoff_ms": 250,
+      "max_backoff_ms": 8000,
+      "batch_size": 50,
+      "flush_interval_ms": 100,
+      "max_pending": 20000
+    },
+    "emitters": 8,
+    "events_per_emitter": 1000,
+    "emit_interval_ms": 5,
+    "flusher_interval_ms": 250,
+    "heartbeat_ms": 10,
+    "driver_timeout_ms": 120000
+  },
+  "php_overrides": {
+    "emitters": 1,
+    "events_per_emitter": 2000,
+    "emit_interval_ms": 0,
+    "flusher_interval_ms": 0
+  },
+  "budgets": {
+    "emit_p99_ms": 10,
+    "emit_max_ms": 250,
+    "heartbeat_max_lag_ms": 250,
+    "allow_errors": []
+  },
+  "scenarios": {
+    "baseline": {
+      "gateway": {"mode": "healthy"},
+      "budgets": {"close_ms": 5000, "deliver_all": true}
+    },
+    "slow": {
+      "gateway": {"mode": "slow", "delay_ms": 1500},
+      "config": {"client": {"batch_size": 500}, "driver_timeout_ms": 180000},
+      "budgets": {"deliver_all": true}
+    },
+    "blackhole": {
+      "gateway": {"mode": "blackhole"},
+      "budgets": {"close_ms": 5000}
+    },
+    "refused": {
+      "gateway": {"mode": "refused"},
+      "budgets": {"close_ms": 1000}
+    },
+    "saturated": {
+      "gateway": {"mode": "refused"},
+      "config": {"client": {"max_pending": 1000}},
+      "budgets": {
+        "allow_errors": ["OutboxError:outbox_full"],
+        "require_errors": ["OutboxError:outbox_full"],
+        "close_ms": 1000
+      }
+    },
+    "flaky": {
+      "gateway": {"mode": "flaky", "seed": 42},
+      "budgets": {"close_ms": 10000}
+    },
+    "recovery": {
+      "gateway": {"mode": "recovery", "down_ms": 3000},
+      "budgets": {"deliver_all": true}
+    }
+  }
+}

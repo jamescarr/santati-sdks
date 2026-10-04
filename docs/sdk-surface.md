@@ -146,12 +146,20 @@ idempotent and `emit` keeps working afterwards — `closed` exists only for
 queued emits.
 
 - Python, TypeScript, Go, Rust, Ruby, PHP: `close()` on the client.
+- Go: `Close(ctx)` cancels a worker send in progress instead of waiting for it (the
+  batch is released and re-sent by the final flush) and runs the final flush under
+  `ctx`; if `ctx` ends first it returns `ctx.Err()` and what was not sent stays in
+  the store. A `Flush` running on another goroutine holds the pass lock, and
+  `Close` waits for it.
 - Elixir: stopping the `Santati.Outbox` process (`terminate/2`) is the close;
   a later `emit` through a client whose `outbox` names the stopped server exits
-  the caller like any dead GenServer.
+  the caller like any dead GenServer. `Santati.flush/1` runs its pass in a
+  Task; the server keeps accepting queued emits meanwhile.
 - PHP: `close()` = `flush()` + mark closed; the first queued `emit` also
   registers a `register_shutdown_function` that runs `flush()` unless
-  `close()` already ran.
+  `close()` already ran. With `finishRequestBeforeFlush`, the shutdown function
+  first calls `fastcgi_finish_request()` when it exists, so the HTTP response is
+  not held by the flush.
 
 `flush()` and the worker's pass are mutually exclusive (one lock per client): a
 pass never runs concurrently with another pass of the same client.
@@ -225,7 +233,7 @@ pass():
       if out is null: store.ack([entry.id]); continue           # dropped: no request, no post_send
       to_send.append((entry, out))
     if to_send is not empty:
-      try: result = events.emit_batch([out for (entry, out) in to_send])   # the ordinary path, full retry budget
+      try: result = events.emit_batch([out for (entry, out) in to_send])   # one attempt: no retries inside a pass; a released batch is retried by a later pass
       except SantatiError e:
         for (entry, _) in to_send: post_send(entry.event, {status: failed, error: e})
         if e is TransportError | ServerError | RateLimitedError: store.release(ids of to_send); released = true
@@ -248,7 +256,7 @@ message: item.error.message}}`.
 Store failures inside a tick are swallowed by the worker (the next tick
 retries); inside `flush()` they raise. Any other unexpected exception in a tick
 is caught so the worker survives. The worker's requests are ordinary
-`emit_batch` requests ([Every request](#every-request) applies unchanged).
+`emit_batch` requests ([Every request](#every-request) applies), sent once: `max_retries` does not apply inside a pass.
 
 |language|tick|
 |---|---|
@@ -331,7 +339,7 @@ read models, re-exported from the public entry point.
 |list|`list(*, trail=…, …, limit=…, cursor=…)`|`list(params?: ListParams)` (camelCase)|`List(ctx, ListParams)`|`list(ListParams)`|`list(client, keyword)`|`list(trail: nil, …, limit: nil, cursor: nil)`|`list(array $params = [])`|
 |iterate|`iterate(*, trail=…, …, limit=…) -> Iterator[AuditEvent]`|`iterate(params?): AsyncGenerator<AuditEvent>`|`Iterate(ctx, ListParams) iter.Seq2[*AuditEvent, error]`|`iterate(ListParams) -> impl Stream<Item = Result<AuditEvent, Error>>`|`stream(client, keyword) :: Enumerable.t()` (raises the error exception)|`iterate(trail: nil, …, limit: nil) -> Enumerator`|`iterate(array $params = []): \Generator`|
 |errors|`santati.SantatiError` + `ValidationError` … `ApiError`|same class names|`*santati.Error{Kind, Status int (0 = none), Code, Field string, RetryAfter *int, Message}`; `Kind` constants `KindValidation`…`KindAPI` whose string values are the kind names|`santati::Error` enum `Validation`, `Auth`, `NotFound`, `RateLimited`, `Server`, `Transport`, `Api`, each holding `ErrorDetails{status: Option<u16>, code, field: Option<String>, retry_after: Option<u64>, message: String}`|`Santati.ValidationError` … `Santati.ApiError` exceptions with fields `status, code, field, retry_after, message`|`Santati::Error` + `Santati::ValidationError` …|`Santati\Exception\SantatiException` + `ValidationException`, `AuthException`, `NotFoundException`, `RateLimitedException`, `ServerException`, `TransportException`, `ApiException`; getters `getStatus()`, `getErrorCode()`, `getField()`, `getRetryAfter()`|
-|options|`Santati(…, outbox=None, batch_size=100, flush_interval_ms=1000, pre_send=None, post_send=None)`|`{outbox?, batchSize?, flushIntervalMs?, preSend?, postSend?}` on `SantatiOptions`|`WithOutbox(OutboxStore)`, `WithBatchSize(int)`, `WithFlushInterval(time.Duration)`, `WithPreSend(PreSendHook)`, `WithPostSend(PostSendHook)`|`Builder::outbox(impl OutboxStore + 'static)`, `.batch_size(usize)`, `.flush_interval(Duration)`, `.pre_send(impl Fn(EventInput) -> Option<EventInput> + Send + Sync + 'static)`, `.post_send(impl Fn(&EventInput, &SendOutcome) + Send + Sync + 'static)`|`Santati.Outbox.start_link(client: %Santati.Client{}, name: …, store: module \| {module, opts}, batch_size: 100, flush_interval_ms: 1000, pre_send: fun/1, post_send: fun/2)`; `{Santati.Outbox, opts}` child spec; `Santati.new(…, outbox: GenServer.server())` makes `Santati.Events.emit/2` store through that server|`Santati::Client.new(…, outbox: nil, batch_size: 100, flush_interval_ms: 1000, pre_send: nil, post_send: nil)` (callables)|`new Client(…, ?OutboxStore $outbox = null, int $batchSize = 100, ?callable $preSend = null, ?callable $postSend = null)`|
+|options|`Santati(…, outbox=None, batch_size=100, flush_interval_ms=1000, pre_send=None, post_send=None)`|`{outbox?, batchSize?, flushIntervalMs?, preSend?, postSend?}` on `SantatiOptions`|`WithOutbox(OutboxStore)`, `WithBatchSize(int)`, `WithFlushInterval(time.Duration)`, `WithPreSend(PreSendHook)`, `WithPostSend(PostSendHook)`|`Builder::outbox(impl OutboxStore + 'static)`, `.batch_size(usize)`, `.flush_interval(Duration)`, `.pre_send(impl Fn(EventInput) -> Option<EventInput> + Send + Sync + 'static)`, `.post_send(impl Fn(&EventInput, &SendOutcome) + Send + Sync + 'static)`|`Santati.Outbox.start_link(client: %Santati.Client{}, name: …, store: module \| {module, opts}, batch_size: 100, flush_interval_ms: 1000, pre_send: fun/1, post_send: fun/2)`; `{Santati.Outbox, opts}` child spec; `Santati.new(…, outbox: GenServer.server())` makes `Santati.Events.emit/2` store through that server|`Santati::Client.new(…, outbox: nil, batch_size: 100, flush_interval_ms: 1000, pre_send: nil, post_send: nil)` (callables)|`new Client(…, ?OutboxStore $outbox = null, int $batchSize = 100, ?callable $preSend = null, ?callable $postSend = null, bool $finishRequestBeforeFlush = false)`|
 |flush|`client.flush() -> None`|`santati.flush(): Promise<void>`|`(*Client).Flush(ctx) error`|`async fn flush(&self) -> Result<(), Error>`|`Santati.Outbox.flush(server, timeout \\ :infinity) :: :ok \| {:error, exception}`; `Santati.flush/1` delegates|`client.flush -> nil`|`$client->flush(): void`|
 |close|`client.close()` (stops the worker and flushes first, when an outbox is set)|`santati.close(): Promise<void>`|`(*Client).Close(ctx) error`|`async fn close(&self) -> Result<(), Error>`|`Santati.Outbox.stop(server, timeout \\ :infinity)` → `terminate/2` flushes|`client.close -> nil`|`$client->close(): void`|
 |store interface|`santati.OutboxStore` (`typing.Protocol`): `enqueue(event: EventInput) -> None`, `claim(limit: int) -> list[OutboxEntry]`, `ack(ids: Sequence[str]) -> None`, `release(ids: Sequence[str]) -> None`|`interface OutboxStore { enqueue(event: EventInput): void \| Promise<void>; claim(limit: number): OutboxEntry[] \| Promise<OutboxEntry[]>; ack(ids: string[]): void \| Promise<void>; release(ids: string[]): void \| Promise<void> }`|`type OutboxStore interface { Enqueue(ctx, EventInput) error; Claim(ctx, limit int) ([]OutboxEntry, error); Ack(ctx, ids []string) error; Release(ctx, ids []string) error }`|`#[async_trait] pub trait OutboxStore: Send + Sync { async fn enqueue(&self, event: EventInput) -> Result<(), Error>; async fn claim(&self, limit: usize) -> Result<Vec<OutboxEntry>, Error>; async fn ack(&self, ids: Vec<String>) -> Result<(), Error>; async fn release(&self, ids: Vec<String>) -> Result<(), Error>; }`|behaviour `Santati.Outbox.Store`: `init(opts) :: {:ok, state} \| {:error, exception}`, `enqueue(state, map) :: {:ok, state} \| {:error, exception}`, `claim(state, n) :: {:ok, [%Santati.OutboxEntry{}], state} \| {:error, exception}`, `ack(state, ids) :: {:ok, state} \| {:error, exception}`, `release(state, ids) :: {:ok, state} \| {:error, exception}`|duck-typed `enqueue(event)`, `claim(limit)`, `ack(ids)`, `release(ids)`|`interface Santati\Outbox\OutboxStore { enqueue(array $event): void; claim(int $limit): array /* list<OutboxEntry> */; ack(array $ids): void; release(array $ids): void }`|

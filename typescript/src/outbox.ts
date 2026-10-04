@@ -58,7 +58,7 @@ export class MemoryOutbox implements OutboxStore {
 
 /** The one method of `Events` the worker needs. */
 export interface BatchSender {
-  emitBatchWithStatus(events: EventInput[]): Promise<{ result: BatchResult; status: number }>;
+  emitBatchWithStatus(events: EventInput[], retries?: boolean): Promise<{ result: BatchResult; status: number }>;
 }
 
 function messageOf(error: unknown): string {
@@ -184,7 +184,10 @@ export class OutboxWorker {
         const ids = toSend.map(({ entry }) => entry.id);
         let sent: { result: BatchResult; status: number } | undefined;
         try {
-          sent = await this.events.emitBatchWithStatus(toSend.map(({ out }) => out));
+          sent = await this.events.emitBatchWithStatus(
+            toSend.map(({ out }) => out),
+            false,
+          );
         } catch (error) {
           if (!(error instanceof SantatiError)) {
             // E.g. a malformed preSend result: reported and dropped, never thrown from flush()/close().

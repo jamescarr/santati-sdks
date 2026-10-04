@@ -101,6 +101,8 @@ final class Events
 
     /**
      * {@see self::emitBatch()} that also returns the HTTP status of the response (202 or 207).
+     * With `$retry` false the request is sent once, which is how the outbox sends: a
+     * retryable failure releases the batch for a later pass.
      *
      * @internal
      *
@@ -110,7 +112,7 @@ final class Events
      *
      * @throws ValidationException|AuthException|NotFoundException|RateLimitedException|ServerException|TransportException|ApiException
      */
-    public function emitBatchWithStatus(array $events): array
+    public function emitBatchWithStatus(array $events, bool $retry = true): array
     {
         if ($events === []) {
             throw new ValidationException('events must not be empty', null, null, 'events');
@@ -128,7 +130,7 @@ final class Events
 
         $request = (new EventBatchRequest())->setEvents($models);
 
-        return $this->client->retry->run(function () use ($request): array {
+        $send = function () use ($request): array {
             [$data, $status] = $this->send(fn () => $this->client->api->eventsCreateWithHttpInfo($request));
 
             if ($status !== 202 && $status !== 207) {
@@ -157,7 +159,9 @@ final class Events
                 rejected: (int) $data->getRejected(),
                 results: $results,
             )];
-        });
+        };
+
+        return $retry ? $this->client->retry->run($send) : $send();
     }
 
     /**

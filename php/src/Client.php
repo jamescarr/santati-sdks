@@ -53,6 +53,7 @@ final class Client
      * @param int                   $batchSize        envelopes per outbox request, 1 to 500
      * @param callable|null         $preSend          `fn (array $event): ?array`, return the event (maybe modified) or null to drop it
      * @param callable|null         $postSend         `fn (array $event, SendOutcome $outcome): void`
+     * @param bool                  $finishRequestBeforeFlush when true and `fastcgi_finish_request()` exists (PHP-FPM), the shutdown flush first finishes the HTTP response
      *
      * @throws ValidationException on an empty $apiKey, an `authorization` header or a $batchSize outside 1..500
      */
@@ -69,6 +70,7 @@ final class Client
         int $batchSize = 100,
         ?callable $preSend = null,
         ?callable $postSend = null,
+        bool $finishRequestBeforeFlush = false,
     ) {
         if ($apiKey === '') {
             throw new ValidationException('api_key must not be empty', null, null, 'api_key');
@@ -106,7 +108,7 @@ final class Client
 
         $this->api = new AuditEventsApi($http, $config);
         $this->events = new Events($this);
-        $this->outbox = $outbox === null ? null : new Outbox($this->events, $outbox, $batchSize, $preSend, $postSend);
+        $this->outbox = $outbox === null ? null : new Outbox($this->events, $outbox, $batchSize, $preSend, $postSend, $finishRequestBeforeFlush);
     }
 
     /**
