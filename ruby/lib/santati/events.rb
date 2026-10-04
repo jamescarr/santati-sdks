@@ -15,9 +15,20 @@ module Santati
       @client = client
     end
 
-    # Emit one event. Returns an {EmitResult}.
+    # Emit one event. Returns an {EmitResult}; with an `outbox:` the event is
+    # stored for the background worker and `queued` is true.
     def emit(event:, trail: nil, organization_id: nil, actor: nil, targets: nil, metadata: nil,
       data: nil, context: nil, created_at: nil, idempotency_key: nil)
+      if (outbox = @client.outbox)
+        stored = prepare(
+          event: event, trail: trail, organization_id: organization_id, actor: actor,
+          targets: targets, metadata: metadata, data: data, context: context,
+          created_at: created_at, idempotency_key: idempotency_key
+        )
+        outbox.enqueue(stored)
+        return EmitResult.new(event: nil, duplicate: false, idempotency_key: stored.fetch(:idempotency_key), queued: true)
+      end
+
       attributes = build_envelope(
         event: event, trail: trail, organization_id: organization_id, actor: actor,
         targets: targets, metadata: metadata, data: data, context: context,
@@ -29,8 +40,8 @@ module Santati
       Retry.call(@client) do
         body, status = generated { @client.api.events_create_with_http_info(request, debug_return_type: "String") }
         case status
-        when 201 then EmitResult.new(event: decode_event(body, status), duplicate: false, idempotency_key: key)
-        when 200 then EmitResult.new(event: decode_event(body, status), duplicate: true, idempotency_key: key)
+        when 201 then EmitResult.new(event: decode_event(body, status), duplicate: false, idempotency_key: key, queued: false)
+        when 200 then EmitResult.new(event: decode_event(body, status), duplicate: true, idempotency_key: key, queued: false)
         else raise ApiError.new("unexpected status #{status}", status: status)
         end
       end

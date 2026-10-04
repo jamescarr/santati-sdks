@@ -1,24 +1,27 @@
 defmodule Santati.Outbox do
   @moduledoc """
-  Fire-and-forget `log/2` on top of an outbox store.
+  The outbox behind `Santati.Events.emit/2` for a client built with `outbox:`.
 
   A `Santati.Outbox` process owns an outbox store (`Santati.Outbox.Memory` by
-  default, `Santati.Outbox.Redis` for a durable one). `log/2` validates an
-  event exactly like `Santati.Events.emit/2`, stores the resolved envelope and
-  answers its idempotency key; it never makes a request. Every
-  `:flush_interval_ms` the process runs a *pass*: it claims up to `:batch_size`
-  entries, runs `:pre_send` on each, sends the survivors through
-  `Santati.Events.emit_batch/2` (in a `Task`, so `log/2` is never blocked by a
-  slow request), reports one `:post_send` call per event and acknowledges what
-  was sent. A batch that fails with a `Santati.TransportError`,
-  `Santati.ServerError` or `Santati.RateLimitedError` is released and the pass
-  ends; any other failure drops the batch.
+  default, `Santati.Outbox.Redis` for a durable one). Name it in the client's
+  `:outbox` option and `Santati.Events.emit/2` validates an event exactly as a
+  plain emit does, stores the resolved envelope here and answers
+  `%Santati.EmitResult{queued: true}` with its idempotency key; it never makes
+  a request. Every `:flush_interval_ms` the process runs a *pass*: it claims up
+  to `:batch_size` entries, runs `:pre_send` on each, sends the survivors
+  through `Santati.Events.emit_batch/2` (in a `Task`, so `emit/2` is never
+  blocked by a slow request), reports one `:post_send` call per event and
+  acknowledges what was sent. A batch that fails with a
+  `Santati.TransportError`, `Santati.ServerError` or
+  `Santati.RateLimitedError` is released and the pass ends; any other failure
+  drops the batch.
 
       children = [
         {Santati.Outbox, client: client, name: MyApp.Santati, batch_size: 100}
       ]
 
-      {:ok, key} = Santati.Outbox.log(MyApp.Santati, %{event: "invoice.voided"})
+      {:ok, client} = Santati.new(api_key: "sat_sk_...", trail: "billing", outbox: MyApp.Santati)
+      {:ok, %Santati.EmitResult{queued: true}} = Santati.Events.emit(client, %{event: "invoice.voided"})
       :ok = Santati.Outbox.flush(MyApp.Santati)
 
   Options of `start_link/1`:
@@ -36,8 +39,9 @@ defmodule Santati.Outbox do
       stored event, never the `:pre_send` output; its raises are ignored
 
   Stopping the process (`stop/2`, or a supervisor shutdown) flushes in
-  `terminate/2`; that is the equivalent of `close()` in the other SDKs. A
-  `log/2` to the stopped server exits the caller like any dead `GenServer`.
+  `terminate/2`; that is the equivalent of `close()` in the other SDKs. An
+  `emit/2` through a client whose `:outbox` names the stopped server exits the
+  caller like any dead `GenServer`.
   """
 
   use GenServer
@@ -83,22 +87,13 @@ defmodule Santati.Outbox do
     end
   end
 
-  @doc """
-  Validates and stores one event, answering `{:ok, idempotency_key}`.
-
-  Answers `{:error, %Santati.ValidationError{}}` like `Santati.Events.emit/2`
-  and `{:error, %Santati.OutboxError{}}` when the store refuses
-  (`outbox_full`) or fails (`store_unavailable`). An event `emit/2` raises on
-  (e.g. a map key with no `String.Chars`) raises the same exception in the
-  caller; the process keeps running.
-  """
-  @spec log(GenServer.server(), map() | keyword()) :: {:ok, String.t()} | {:error, Exception.t()}
-  def log(server, event) do
-    case GenServer.call(server, {:log, event}) do
-      {:raise, error, stacktrace} -> reraise error, stacktrace
-      reply -> reply
-    end
-  end
+  @doc false
+  # Stores one resolved wire envelope. `Santati.Events.emit/2` builds the
+  # envelope in the caller (so a raise there never reaches this process) and
+  # answers `{:error, %Santati.OutboxError{}}` when the store refuses
+  # (`outbox_full`) or fails (`store_unavailable`).
+  @spec enqueue(GenServer.server(), map()) :: :ok | {:error, Exception.t()}
+  def enqueue(server, envelope), do: GenServer.call(server, {:enqueue, envelope})
 
   @doc """
   Runs one pass synchronously: answers `:ok`, or `{:error, exception}` with a
@@ -154,13 +149,9 @@ defmodule Santati.Outbox do
   end
 
   @impl true
-  def handle_call({:log, event}, _from, state) do
-    with {:ok, envelope, key} <- build_envelope(state.client, event),
-         {:ok, state} <- store(state, :enqueue, [envelope]) do
-      {:reply, {:ok, key}, arm(state)}
-    else
-      {:raise, _error, _stacktrace} = raised -> {:reply, raised, state}
-      {:error, error} -> {:reply, {:error, error}, state}
+  def handle_call({:enqueue, envelope}, _from, state) do
+    case store(state, :enqueue, [envelope]) do
+      {:ok, state} -> {:reply, :ok, arm(state)}
       {:error, error, state} -> {:reply, {:error, error}, state}
     end
   end
@@ -355,13 +346,6 @@ defmodule Santati.Outbox do
 
         if retryable?(error), do: {[], Enum.into(ids, released)}, else: {ids, released}
     end
-  end
-
-  # A raise belongs to the caller of log/2: here it would take every pending event down with it.
-  defp build_envelope(client, event) do
-    Events.build_envelope(client, event)
-  rescue
-    error -> {:raise, error, __STACKTRACE__}
   end
 
   # E.g. a malformed :pre_send result: a failed, non-retryable outcome instead of a crashed Task.

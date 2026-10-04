@@ -9,7 +9,6 @@ use Santati\Core\Api\AuditEventsApi;
 use Santati\Core\Configuration;
 use Santati\Exception\OutboxException;
 use Santati\Exception\ValidationException;
-use Santati\Outbox\MemoryOutbox;
 use Santati\Outbox\Outbox;
 use Santati\Outbox\OutboxStore;
 
@@ -36,7 +35,10 @@ final class Client
      */
     public readonly AuditEventsApi $api;
 
-    private readonly Outbox $outbox;
+    /**
+     * @internal the outbox behind a queued `events->emit()`; null without an `outbox`
+     */
+    public readonly ?Outbox $outbox;
 
     /**
      * @param string                $apiKey           team API key (`sat_sk_…`), required and non-empty
@@ -47,7 +49,7 @@ final class Client
      * @param int                   $initialBackoffMs backoff base
      * @param int                   $maxBackoffMs     backoff cap
      * @param array<string, string> $headers          extra headers on every request
-     * @param OutboxStore|null      $outbox           where `log()` keeps events; default `MemoryOutbox(10000)`
+     * @param OutboxStore|null      $outbox           when set, `events->emit()` stores events here instead of sending them; default none
      * @param int                   $batchSize        envelopes per outbox request, 1 to 500
      * @param callable|null         $preSend          `fn (array $event): ?array`, return the event (maybe modified) or null to drop it
      * @param callable|null         $postSend         `fn (array $event, SendOutcome $outcome): void`
@@ -104,45 +106,31 @@ final class Client
 
         $this->api = new AuditEventsApi($http, $config);
         $this->events = new Events($this);
-        $this->outbox = new Outbox($this->events, $outbox ?? new MemoryOutbox(), $batchSize, $preSend, $postSend);
-    }
-
-    /**
-     * Fire-and-forget emit: validates like `events->emit()`, stores the event
-     * in the outbox and returns its idempotency key. Never makes a request;
-     * `flush()`, `close()` or the end of the script send it.
-     *
-     * @param array<string, mixed> $event the same input as `events->emit()`
-     *
-     * @throws ValidationException on an invalid event
-     * @throws OutboxException     when the store refuses it, or the client is closed
-     */
-    public function log(array $event): string
-    {
-        return $this->outbox->log($this->events->prepare($event));
+        $this->outbox = $outbox === null ? null : new Outbox($this->events, $outbox, $batchSize, $preSend, $postSend);
     }
 
     /**
      * Runs one pass: sends everything stored in batches of `batchSize`.
      * Send failures go through the delivery policy and `postSend`; only a
-     * failing store raises.
+     * failing store raises. Does nothing without an `outbox`.
      *
      * @throws OutboxException when the store fails
      */
     public function flush(): void
     {
-        $this->outbox->flush();
+        $this->outbox?->flush();
     }
 
     /**
-     * Flushes and marks the client closed; later `log()` calls raise
-     * `OutboxException` (`closed`). Calling it again does nothing.
+     * Flushes and marks the client closed; later queued emits raise
+     * `OutboxException` (`closed`). Calling it again does nothing, and it does
+     * nothing without an `outbox`.
      *
      * @throws OutboxException when the store fails
      */
     public function close(): void
     {
-        $this->outbox->close();
+        $this->outbox?->close();
     }
 
     public static function userAgent(): string

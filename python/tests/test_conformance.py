@@ -128,23 +128,30 @@ def _gateway(spec: dict[str, Any], requests: list[RecordedRequest]) -> Iterator[
         thread.join()
 
 
-def _open_client(case_input: dict[str, Any], base_url: str, **extra: Any) -> santati.Santati:
+def _open_client(case_input: dict[str, Any], base_url: str, *, outbox: bool = False, **extra: Any) -> santati.Santati:
     options = dict(case_input.get("client") or {})
     base_path = options.pop("base_path", "")
     max_pending = options.pop("max_pending", None)
-    if max_pending is not None:
-        options["outbox"] = santati.MemoryOutbox(max_pending=max_pending)
+    if outbox:
+        options["outbox"] = (
+            santati.MemoryOutbox(max_pending=max_pending) if max_pending is not None else santati.MemoryOutbox()
+        )
     return santati.Santati(base_url=f"{base_url}{base_path}", **options, **extra)
+
+
+def _emit_result(result: santati.EmitResult) -> dict[str, Any]:
+    return {
+        "event": result.event.to_dict() if result.event is not None else None,
+        "duplicate": result.duplicate,
+        "idempotency_key": result.idempotency_key,
+        "queued": result.queued,
+    }
 
 
 def _run_emit(case: dict[str, Any], base_url: str) -> Any:
     with _open_client(case["input"], base_url) as client:
         result = client.events.emit(**case["input"]["event"])
-    return {
-        "event": result.event.to_dict(),
-        "duplicate": result.duplicate,
-        "idempotency_key": result.idempotency_key,
-    }
+    return _emit_result(result)
 
 
 def _run_emit_batch(case: dict[str, Any], base_url: str) -> Any:
@@ -178,8 +185,8 @@ def _run_iterate(case: dict[str, Any], base_url: str) -> Any:
     return [event.to_dict() for event in events]
 
 
-def _run_log(case: dict[str, Any], base_url: str) -> Any:
-    """Log every event, close, and report the keys and each post_send outcome."""
+def _run_emit_outbox(case: dict[str, Any], base_url: str) -> Any:
+    """Emit every event through an outbox, close, and report the results and each post_send outcome."""
     hooks = case["input"].get("hooks") or {}
     outcomes: list[dict[str, Any]] = []
 
@@ -219,19 +226,19 @@ def _run_log(case: dict[str, Any], base_url: str) -> Any:
 
         extra["pre_send"] = pre_send
 
-    client = _open_client(case["input"], base_url, **extra)
-    keys: list[str] = []
+    client = _open_client(case["input"], base_url, outbox=True, **extra)
+    results: list[dict[str, Any]] = []
     error: santati.SantatiError | None = None
     try:
         for event in case["input"]["events"]:
-            keys.append(client.log(**event))
+            results.append(_emit_result(client.events.emit(**event)))
     except santati.SantatiError as err:
         error = err
     finally:
         client.close()
     if error is not None:
         raise error
-    return {"keys": keys, "outcomes": outcomes}
+    return {"results": results, "outcomes": outcomes}
 
 
 RUNNERS: dict[str, Runner] = {
@@ -239,7 +246,7 @@ RUNNERS: dict[str, Runner] = {
     "emit_batch": _run_emit_batch,
     "list": _run_list,
     "iterate": _run_iterate,
-    "log": _run_log,
+    "emit_outbox": _run_emit_outbox,
 }
 
 

@@ -228,6 +228,7 @@ function makeClient(
   options: ClientOptions,
   hooks: Hooks = {},
   outcomes: Outcome[] = [],
+  outbox = false,
 ): santati.Santati {
   const pre = hooks.pre_send;
   return new santati.Santati({
@@ -241,10 +242,11 @@ function makeClient(
     headers: options.headers,
     batchSize: options.batch_size,
     flushIntervalMs: options.flush_interval_ms,
-    outbox:
-      options.max_pending != null
-        ? new santati.MemoryOutbox({ maxPending: options.max_pending })
-        : undefined,
+    outbox: outbox
+      ? new santati.MemoryOutbox(
+          options.max_pending != null ? { maxPending: options.max_pending } : {},
+        )
+      : undefined,
     preSend: pre
       ? (event) => {
           if (pre.raise) throw new Error("conformance pre_send");
@@ -301,20 +303,31 @@ function listParams(raw: WireParams = {}): santati.ListParams {
   };
 }
 
+/** An EmitResult in the vector's wire shape. */
+function emitResult(r: santati.EmitResult): unknown {
+  return {
+    event: r.event === null ? null : santati.AuditEventToJSON(r.event),
+    duplicate: r.duplicate,
+    idempotency_key: r.idempotencyKey,
+    queued: r.queued,
+  };
+}
+
 /** Runs the case's operation and returns it in the vector's wire shape. */
 async function dispatch(c: Case, requests: Recorded[]): Promise<unknown> {
   const gateway = await startGateway(c.input.gateway, requests);
   try {
     const outcomes: Outcome[] = [];
-    const client = makeClient(gateway.origin, c.input.client, c.input.hooks, outcomes);
+    const client = makeClient(
+      gateway.origin,
+      c.input.client,
+      c.input.hooks,
+      outcomes,
+      c.operation === "emit_outbox",
+    );
     switch (c.operation) {
       case "emit": {
-        const result = await client.events.emit(eventInput(c.input.event));
-        return {
-          event: santati.AuditEventToJSON(result.event),
-          duplicate: result.duplicate,
-          idempotency_key: result.idempotencyKey,
-        };
+        return emitResult(await client.events.emit(eventInput(c.input.event)));
       }
       case "emit_batch": {
         const result = await client.events.emitBatch((c.input.events ?? []).map(eventInput));
@@ -340,18 +353,20 @@ async function dispatch(c: Case, requests: Recorded[]): Promise<unknown> {
         }
         return events;
       }
-      case "log": {
-        const keys: string[] = [];
+      case "emit_outbox": {
+        const results: unknown[] = [];
         let failure: unknown;
         try {
-          for (const event of c.input.events ?? []) keys.push(await client.log(eventInput(event)));
+          for (const event of c.input.events ?? []) {
+            results.push(emitResult(await client.events.emit(eventInput(event))));
+          }
         } catch (error) {
           if (!(error instanceof santati.SantatiError)) throw error;
           failure = error;
         }
         await client.close();
         if (failure !== undefined) throw failure;
-        return { keys, outcomes };
+        return { results, outcomes };
       }
       default:
         return assert.fail(`unknown conformance operation ${c.operation}`);

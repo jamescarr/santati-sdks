@@ -8,7 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via `predis/predis`), `preSend`/`postSend` hooks, `flush()`/`close()`; pending events are also flushed at shutdown. A batch that fails with anything but a `SantatiException` (e.g. a malformed `preSend` result) is reported to `postSend` as `OutboxException` `hook_failed` and dropped, never thrown.
+- An opt-in outbox: with `outbox:` (`MemoryOutbox`, or a Redis adapter via `predis/predis`) `events->emit()` stores the event and returns at once with `EmitResult::$queued` true; `flush()`/`close()` (and the end of the script) send the outbox in batches of `batchSize` through `emitBatch()`, with `preSend`/`postSend` hooks. A batch that fails with anything but a `SantatiException` (e.g. a malformed `preSend` result) is reported to `postSend` as `OutboxException` `hook_failed` and dropped, never thrown.
+
+### Changed
+
+- `EmitResult` has a new `queued` field, and its `event` is null for a queued emit.
 
 ## [0.1.0] - 2026-10-01
 

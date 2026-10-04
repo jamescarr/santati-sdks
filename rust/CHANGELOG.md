@@ -10,10 +10,11 @@ and this project adheres to
 
 ### Added
 
-- `log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via the `redis` feature), background batching, `pre_send`/`post_send` hooks, `flush()`/`close()`.
+- An opt-in outbox: with `Builder::outbox` (`MemoryOutbox`, or Redis Streams via the `redis` feature) `Events::emit` stores the event and returns at once with `EmitResult::queued` true; a background task sends the outbox in batches of `batch_size` every `flush_interval` through `emit_batch`, with `pre_send`/`post_send` hooks, `flush()`/`close()`.
 
 ### Changed
 
+- `EmitResult` has a new `queued` field, and its `event` is now an `Option<AuditEvent>`, `None` for a queued emit.
 - The minimum supported Rust version is now 1.88 (from 1.85), the MSRV of the
   `redis` crate behind the new `redis` feature.
 

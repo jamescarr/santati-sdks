@@ -9,6 +9,7 @@ use reqwest::{RequestBuilder, Response};
 use crate::client::Santati;
 use crate::error::Error;
 use crate::models;
+use crate::outbox;
 use crate::retry::run as run_with_retries;
 use crate::types::{
     ActorInput, BatchItem, BatchItemError, BatchResult, BatchStatus, EmitResult, EventInput,
@@ -35,9 +36,27 @@ impl<'a> Events<'a> {
     /// The envelope carries exactly the supplied members; `trail` falls back to
     /// the client's, and `idempotency_key` to a freshly generated UUIDv4. A
     /// `201` is a new event and a `200` a replay: see [`EmitResult::duplicate`].
+    ///
+    /// With [`Builder::outbox`](crate::Builder::outbox), the event is stored and
+    /// the call returns at once with `queued` set; it never makes a request.
     pub async fn emit(&self, event: EventInput) -> Result<EmitResult, Error> {
         let envelope = self.envelope(&event, "")?;
         let idempotency_key = envelope.idempotency_key.clone().unwrap_or_default();
+        if let Some(state) = self.client.outbox_state() {
+            let stored = EventInput {
+                trail: Some(envelope.trail),
+                idempotency_key: Some(idempotency_key.clone()),
+                data: event.data.filter(|data| !data.is_null()),
+                ..event
+            };
+            outbox::enqueue(self.client, state, stored).await?;
+            return Ok(EmitResult {
+                event: None,
+                duplicate: false,
+                idempotency_key,
+                queued: true,
+            });
+        }
         let body = models::EventIngestRequest::EventEnvelopeRequest(envelope);
         let policy = self.client.retry_policy();
         run_with_retries(policy, || self.attempt_emit(&body, &idempotency_key)).await
@@ -126,9 +145,10 @@ impl<'a> Events<'a> {
                 let event: models::AuditEvent = serde_json::from_slice(&response.body)
                     .map_err(|_| Error::api(response.status))?;
                 Ok(EmitResult {
-                    event,
+                    event: Some(event),
                     duplicate: response.status == 200,
                     idempotency_key: idempotency_key.to_string(),
+                    queued: false,
                 })
             }
             status if (200..300).contains(&status) => Err(Error::api(status)),

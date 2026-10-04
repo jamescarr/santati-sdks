@@ -18,7 +18,6 @@ const (
 	defaultBatchSize      = 100
 	maxBatchSize          = 500
 	defaultFlushInterval  = time.Second
-	defaultMaxPending     = 10000
 )
 
 // Client is a Santati API client. Create one with NewClient and reuse it; it
@@ -93,8 +92,8 @@ func WithHeader(key, value string) Option {
 	return func(c *clientConfig) { c.headers[key] = value }
 }
 
-// WithOutbox sets the store Log writes to. The default is a MemoryOutbox that
-// holds up to 10000 events.
+// WithOutbox makes Events.Emit store events in store for the background
+// worker instead of sending them. Without it, Emit sends each event itself.
 func WithOutbox(store OutboxStore) Option {
 	return func(c *clientConfig) { c.outbox = store }
 }
@@ -186,17 +185,15 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 	}
 	c.Events = &Events{client: c}
 
-	store := cfg.outbox
-	if store == nil {
-		store, _ = NewMemoryOutbox(defaultMaxPending)
-	}
-	c.outbox = &outbox{
-		client:    c,
-		store:     store,
-		batchSize: cfg.batchSize,
-		interval:  cfg.flushInterval,
-		preSend:   cfg.preSend,
-		postSend:  cfg.postSend,
+	if cfg.outbox != nil {
+		c.outbox = &outbox{
+			client:    c,
+			store:     cfg.outbox,
+			batchSize: cfg.batchSize,
+			interval:  cfg.flushInterval,
+			preSend:   cfg.preSend,
+			postSend:  cfg.postSend,
+		}
 	}
 	return c, nil
 }

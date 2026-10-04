@@ -29,7 +29,7 @@ test("an unexpected send failure is reported and dropped", async () => {
     },
   });
 
-  await santati.log({ event: "a.b", trail: "t" });
+  await santati.events.emit({ event: "a.b", trail: "t" });
   await santati.flush();
 
   assert.equal(outcomes.length, 1);
@@ -40,12 +40,12 @@ test("an unexpected send failure is reported and dropped", async () => {
   await santati.close();
 });
 
-test("log stores a snapshot of the event", async () => {
+test("a queued emit stores a snapshot of the event", async () => {
   const store = new MemoryOutbox();
   const santati = client(store);
   const metadata = { a: "1" };
 
-  await santati.log({ event: "a.b", trail: "t", metadata });
+  await santati.events.emit({ event: "a.b", trail: "t", metadata });
   metadata.a = "2";
 
   assert.deepEqual((await store.claim(1))[0]?.event.metadata, { a: "1" });

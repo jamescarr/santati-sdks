@@ -11,7 +11,7 @@ import type {
 
 const DEFAULT_MAX_PENDING = 10_000;
 
-/** A bounded in-memory `OutboxStore`: the default. Lost when the process exits. */
+/** A bounded in-memory `OutboxStore`. Lost when the process exits. */
 export class MemoryOutbox implements OutboxStore {
   private readonly maxPending: number;
   private pending: OutboxEntry[] = [];
@@ -78,7 +78,7 @@ function retryable(error: SantatiError): boolean {
   );
 }
 
-/** The client's outbox side: `log`, the background tick and the pass shared with `flush`. */
+/** The client's outbox side: a queued `emit`, the background tick and the pass shared with `flush`. */
 export class OutboxWorker {
   private closed = false;
   private timer: NodeJS.Timeout | undefined;
@@ -95,7 +95,7 @@ export class OutboxWorker {
   ) {}
 
   /** Stores the already-resolved event; never makes a request. */
-  async log(stored: EventInput): Promise<string> {
+  async enqueue(stored: EventInput): Promise<void> {
     if (this.closed) throw new OutboxError("client is closed", { code: "closed" });
     try {
       await this.store.enqueue(stored);
@@ -106,7 +106,6 @@ export class OutboxWorker {
       this.started = true;
       this.arm();
     }
-    return stored.idempotencyKey as string;
   }
 
   /** One pass, serialised with the worker's own passes. */

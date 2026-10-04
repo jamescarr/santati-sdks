@@ -2,18 +2,21 @@ defmodule Santati.EmitResult do
   @moduledoc """
   One accepted (or replayed) emit.
 
-    * `event` — the stored `SantatiCore.Model.AuditEvent`
+    * `event` — the stored `SantatiCore.Model.AuditEvent` (`nil` when queued)
     * `duplicate` — `true` when the server replayed an earlier request
     * `idempotency_key` — the key the envelope carried
+    * `queued` — `true` when the client's `:outbox` stored the event instead of
+      sending it
   """
 
   @derive JSON.Encoder
-  defstruct [:event, :duplicate, :idempotency_key]
+  defstruct [:event, :duplicate, :idempotency_key, queued: false]
 
   @type t :: %__MODULE__{
-          event: SantatiCore.Model.AuditEvent.t(),
+          event: SantatiCore.Model.AuditEvent.t() | nil,
           duplicate: boolean(),
-          idempotency_key: String.t()
+          idempotency_key: String.t(),
+          queued: boolean()
         }
 end
 

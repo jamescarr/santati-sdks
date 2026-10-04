@@ -127,12 +127,15 @@ pub struct ListParams {
 /// The result of [`crate::Events::emit`].
 #[derive(Debug, Clone, PartialEq)]
 pub struct EmitResult {
-    /// The stored event.
-    pub event: crate::AuditEvent,
+    /// The stored event; `None` when queued.
+    pub event: Option<crate::AuditEvent>,
     /// True when the server replayed an earlier request with the same key.
     pub duplicate: bool,
     /// The idempotency key the request carried.
     pub idempotency_key: String,
+    /// True when the client has an outbox and the event was stored for the
+    /// background worker instead of sent.
+    pub queued: bool,
 }
 
 /// Why one batch item was rejected.

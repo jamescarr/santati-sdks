@@ -86,6 +86,7 @@ $client = new Client(
     initialBackoffMs: 250,
     maxBackoffMs: 8000,
     headers: ['x-source' => 'billing-job'], // extra headers on every request
+    outbox: null,                          // when set, events->emit() queues here instead of sending
 );
 ```
 
@@ -102,28 +103,32 @@ accept the audit-event filters (`trail`, `event`, `event_prefix`,
 `created_after`, `created_before`, `q`, `sort`, `limit`, `cursor`) as
 `[$name => $value]`; unknown names raise a `ValidationException`.
 
-## Outbox and `log`
+## Outbox
 
-`log()` validates like `emit()`, stores the event in an outbox and returns its
-idempotency key without making a request. `flush()` sends what is stored in
-batches (`batchSize`, default 100) through `events->emitBatch()`; `close()`
-flushes and closes the client, and the end of the script flushes anything still
-pending. PHP has no background worker, so nothing is sent before one of those.
+Without an `outbox`, `events->emit()` sends the event and returns the stored
+one. With one, `emit()` validates like a plain `emit()`, stores the event in the
+outbox and returns at once with `queued` true and a null `event`, without making
+a request. `flush()` sends what is stored in batches (`batchSize`, default 100)
+through `events->emitBatch()`; `close()` flushes and closes the client, and the
+end of the script flushes anything still pending. PHP has no background worker,
+so nothing is sent before one of those.
 
 ```php
 $client = new Client(
     apiKey: 'sat_sk_…',
     trail: 'billing',
+    outbox: new Santati\Outbox\MemoryOutbox(),
     postSend: fn (array $event, Santati\SendOutcome $o) => error_log($event['event'] . ' ' . $o->status),
 );
 
-$key = $client->log(['event' => 'invoice.voided', 'organization_id' => 'org_acme']);
+$result = $client->events->emit(['event' => 'invoice.voided', 'organization_id' => 'org_acme']);
+// $result->queued === true, $result->event === null
 
 $client->close();
 ```
 
 `preSend` receives each stored event and returns it (possibly modified) or
-`null` to drop it. Events left in the in-memory outbox are lost when the
+`null` to drop it. Events left in a `MemoryOutbox` are lost when the
 process dies; pass `outbox: new Santati\Outbox\RedisOutbox($predis)` (a
 `Predis\ClientInterface`; install it with `composer require predis/predis`) to
 keep them in a Redis Stream that any Santati SDK can drain.

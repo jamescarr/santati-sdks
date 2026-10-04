@@ -91,7 +91,7 @@ final class ConformanceTest extends TestCase
             $outcomes = [];
 
             try {
-                $produced = $this->produce($this->client($input['client'], $origin, $input['hooks'] ?? null, $outcomes), $case, $outcomes);
+                $produced = $this->produce($this->client($input['client'], $origin, $input['hooks'] ?? null, $outcomes, $case['operation'] === 'emit_outbox'), $case, $outcomes);
             } catch (\Throwable $e) {
                 $thrown = $e;
             }
@@ -130,10 +130,10 @@ final class ConformanceTest extends TestCase
 
     /**
      * @param array<string, mixed>      $options
-     * @param array<string, mixed>|null $hooks    the `log` vectors' hook behaviours
+     * @param array<string, mixed>|null $hooks    the `emit_outbox` vectors' hook behaviours
      * @param list<array<string, mixed>> $outcomes collects the `post_send` calls
      */
-    private function client(array $options, string $origin, ?array $hooks, array &$outcomes): Client
+    private function client(array $options, string $origin, ?array $hooks, array &$outcomes, bool $outbox): Client
     {
         $pre = $hooks['pre_send'] ?? null;
         $preSend = $pre === null ? null : static function (array $event) use ($pre): ?array {
@@ -181,7 +181,7 @@ final class ConformanceTest extends TestCase
             initialBackoffMs: $options['initial_backoff_ms'] ?? 250,
             maxBackoffMs: $options['max_backoff_ms'] ?? 8000,
             headers: $options['headers'] ?? [],
-            outbox: isset($options['max_pending']) ? new MemoryOutbox($options['max_pending']) : null,
+            outbox: $outbox ? new MemoryOutbox($options['max_pending'] ?? 10000) : null,
             batchSize: $options['batch_size'] ?? 100,
             preSend: $preSend,
             postSend: $postSend,
@@ -201,29 +201,30 @@ final class ConformanceTest extends TestCase
             'emit' => self::wire($this->emitPayload($client, $input['event'])),
             'emit_batch' => self::wire($this->batchPayload($client, $input['events'])),
             'list' => self::wire($this->pagePayload($client, $input['params'] ?? [])),
-            'log' => $this->logPayload($client, $input['events'], $outcomes),
+            'emit_outbox' => $this->emitOutboxPayload($client, $input['events'], $outcomes),
             'iterate' => self::wire(iterator_to_array($client->events->iterate($input['params'] ?? []), false)),
             default => throw new \RuntimeException('unknown operation ' . $case['operation']),
         };
     }
 
     /**
-     * Logs every event, closes the client (also when logging failed), then
-     * reports the keys and outcomes or the remembered error.
+     * Emits every event through the outbox, closes the client (also when
+     * emitting failed), then reports the results and outcomes or the
+     * remembered error.
      *
      * @param list<array<string, mixed>> $events
      * @param list<array<string, mixed>> $outcomes
      *
      * @return array<string, mixed>
      */
-    private function logPayload(Client $client, array $events, array &$outcomes): array
+    private function emitOutboxPayload(Client $client, array $events, array &$outcomes): array
     {
-        $keys = [];
+        $results = [];
         $remembered = null;
 
         try {
             foreach ($events as $event) {
-                $keys[] = $client->log($event);
+                $results[] = self::wire($this->emitPayload($client, $event));
             }
         } catch (SantatiException $e) {
             $remembered = $e;
@@ -235,7 +236,7 @@ final class ConformanceTest extends TestCase
             throw $remembered;
         }
 
-        return ['keys' => $keys, 'outcomes' => $outcomes];
+        return ['results' => $results, 'outcomes' => $outcomes];
     }
 
     /**
@@ -249,6 +250,7 @@ final class ConformanceTest extends TestCase
             'event' => $result->event,
             'duplicate' => $result->duplicate,
             'idempotency_key' => $result->idempotencyKey,
+            'queued' => $result->queued,
         ];
     }
 

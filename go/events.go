@@ -26,10 +26,23 @@ type Events struct {
 //
 // It validates locally before sending: an empty Event fails with field "event"
 // and an unresolved trail fails with field "trail".
+//
+// With WithOutbox, Emit stores the event and returns at once with Queued set;
+// it never makes a request.
 func (e *Events) Emit(ctx context.Context, input EventInput) (*EmitResult, error) {
 	envelope, key, err := e.client.envelope(input, "event", "trail")
 	if err != nil {
 		return nil, err
+	}
+	if o := e.client.outbox; o != nil {
+		// A snapshot, so later changes to the caller's maps and slices do not reach the stored event.
+		stored := cloneEvent(input)
+		stored.Trail = envelope.Trail
+		stored.IdempotencyKey = key
+		if err := o.enqueue(ctx, stored); err != nil {
+			return nil, err
+		}
+		return &EmitResult{IdempotencyKey: key, Queued: true}, nil
 	}
 	request := e.client.api.AuditEventsAPI.EventsCreate(e.client.authorize(ctx)).
 		EventIngestRequest(core.EventEnvelopeRequestAsEventIngestRequest(envelope))

@@ -20,8 +20,12 @@ func TestPostSendSeesOriginalAfterPreSendMutation(t *testing.T) {
 	defer server.Close()
 
 	var seen santati.EventInput
+	store, err := santati.NewMemoryOutbox(10)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := santati.NewClient("sat_sk_x",
-		santati.WithBaseURL(server.URL), santati.WithTrail("t"),
+		santati.WithBaseURL(server.URL), santati.WithTrail("t"), santati.WithOutbox(store),
 		santati.WithPreSend(func(e santati.EventInput) (santati.EventInput, bool) {
 			e.Metadata["region"] = "eu"
 			e.Actor.Metadata["k"] = "v"
@@ -33,7 +37,7 @@ func TestPostSendSeesOriginalAfterPreSendMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	_, err = client.Log(ctx, santati.EventInput{
+	_, err = client.Events.Emit(ctx, santati.EventInput{
 		Event:    "a.b",
 		Metadata: map[string]string{},
 		Actor:    &santati.ActorInput{Type: "user", ID: "u", Metadata: map[string]string{}},
@@ -49,8 +53,8 @@ func TestPostSendSeesOriginalAfterPreSendMutation(t *testing.T) {
 	}
 }
 
-// Changing the caller's maps after Log must not change the stored event.
-func TestLogSnapshotsTheEvent(t *testing.T) {
+// Changing the caller's maps after a queued Emit must not change the stored event.
+func TestQueuedEmitSnapshotsTheEvent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
@@ -59,8 +63,12 @@ func TestLogSnapshotsTheEvent(t *testing.T) {
 	defer server.Close()
 
 	var seen santati.EventInput
+	store, err := santati.NewMemoryOutbox(10)
+	if err != nil {
+		t.Fatal(err)
+	}
 	client, err := santati.NewClient("sat_sk_x",
-		santati.WithBaseURL(server.URL), santati.WithTrail("t"),
+		santati.WithBaseURL(server.URL), santati.WithTrail("t"), santati.WithOutbox(store),
 		santati.WithPostSend(func(e santati.EventInput, _ santati.SendOutcome) { seen = e }),
 	)
 	if err != nil {
@@ -68,7 +76,7 @@ func TestLogSnapshotsTheEvent(t *testing.T) {
 	}
 	ctx := context.Background()
 	m := map[string]string{"a": "1"}
-	if _, err := client.Log(ctx, santati.EventInput{Event: "a.b", Metadata: m}); err != nil {
+	if _, err := client.Events.Emit(ctx, santati.EventInput{Event: "a.b", Metadata: m}); err != nil {
 		t.Fatal(err)
 	}
 	m["a"] = "2"

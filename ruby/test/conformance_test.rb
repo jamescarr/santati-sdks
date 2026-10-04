@@ -102,7 +102,10 @@ class ConformanceTest < Minitest::Test
       error = nil
       outcomes = []
       begin
-        client = build_client(input.fetch("client"), base_url, input["hooks"], outcomes)
+        client = build_client(
+          input.fetch("client"), base_url, input["hooks"], outcomes,
+          outbox: test_case.fetch("operation") == "emit_outbox"
+        )
         result = perform(client, test_case.fetch("operation"), input, outcomes)
       rescue Santati::Error => e
         error = e
@@ -138,7 +141,7 @@ class ConformanceTest < Minitest::Test
     end
   end
 
-  def build_client(spec, base_url, hooks, outcomes)
+  def build_client(spec, base_url, hooks, outcomes, outbox:)
     options = {
       api_key: spec.fetch("api_key"),
       base_url: base_url + spec.fetch("base_path", ""),
@@ -151,7 +154,9 @@ class ConformanceTest < Minitest::Test
     %w[batch_size flush_interval_ms].each do |name|
       options[name.to_sym] = spec[name] if spec.key?(name)
     end
-    options[:outbox] = Santati::MemoryOutbox.new(max_pending: spec["max_pending"]) if spec.key?("max_pending")
+    if outbox
+      options[:outbox] = spec.key?("max_pending") ? Santati::MemoryOutbox.new(max_pending: spec["max_pending"]) : Santati::MemoryOutbox.new
+    end
     options[:pre_send] = pre_send_hook(hooks["pre_send"]) if hooks&.key?("pre_send")
     options[:post_send] = post_send_hook(hooks&.dig("post_send"), outcomes)
     Santati::Client.new(**options)
@@ -188,8 +193,8 @@ class ConformanceTest < Minitest::Test
 
   def perform(client, operation, input, outcomes)
     case operation
-    when "log"
-      log_ok(client, input.fetch("events"), outcomes)
+    when "emit_outbox"
+      emit_outbox_ok(client, input.fetch("events"), outcomes)
     when "emit"
       emit_ok(client.events.emit(**symbolize(input.fetch("event"))))
     when "emit_batch"
@@ -203,13 +208,13 @@ class ConformanceTest < Minitest::Test
     end
   end
 
-  # Logs every event, then closes the client; an SDK error stops the logging
-  # and is raised once the client is closed.
-  def log_ok(client, events, outcomes)
-    keys = []
+  # Emits every event through the outbox, then closes the client; an SDK error
+  # stops the emitting and is raised once the client is closed.
+  def emit_outbox_ok(client, events, outcomes)
+    results = []
     error = nil
     begin
-      events.each { |event| keys << client.log(**symbolize(event)) }
+      events.each { |event| results << emit_ok(client.events.emit(**symbolize(event))) }
     rescue Santati::Error => e
       error = e
     ensure
@@ -217,14 +222,15 @@ class ConformanceTest < Minitest::Test
     end
     raise error if error
 
-    {"keys" => keys, "outcomes" => outcomes}
+    {"results" => results, "outcomes" => outcomes}
   end
 
   def emit_ok(result)
     {
-      "event" => wire(result.event),
+      "event" => result.event && wire(result.event),
       "duplicate" => result.duplicate,
-      "idempotency_key" => result.idempotency_key
+      "idempotency_key" => result.idempotency_key,
+      "queued" => result.queued
     }
   end
 

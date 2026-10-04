@@ -1,5 +1,5 @@
 {
-  "operations": ["emit", "emit_batch", "list", "iterate", "log"],
+  "operations": ["emit", "emit_batch", "list", "iterate", "emit_outbox"],
   "error_kinds": [
     "ValidationError",
     "AuthError",
@@ -17,7 +17,7 @@
     {"id": "client.transport", "description": "A connection that cannot be established (refused, DNS, TLS) raises TransportError with no status."},
     {"id": "emit.envelope", "description": "Sends exactly the supplied envelope members — resolved trail, snake_case keys, absent or null members omitted, `created_at` verbatim, and the envelope's idempotency_key winning over the client's."},
     {"id": "emit.idempotency", "description": "Generates a lowercase UUIDv4 idempotency_key for an emit that does not supply one, and reuses it across retries of that emit."},
-    {"id": "emit.result", "description": "201 answers EmitResult with `duplicate` false and the stored AuditEvent; 200 answers `duplicate` true; any other 2xx raises ApiError."},
+    {"id": "emit.result", "description": "201 answers EmitResult with `duplicate` false and the stored AuditEvent; 200 answers `duplicate` true; any other 2xx raises ApiError; every synchronous emit answers `queued` false."},
     {"id": "emit.validation", "description": "Rejects an empty `event` and an unresolved (empty or absent) trail with ValidationError before any request, and nothing else: values the server validates, such as empty metadata values or names past 255 characters, are forwarded unchanged."},
     {"id": "batch.request", "description": "Posts `{\"events\": [envelope…]}` with one generated idempotency key per item lacking one; an empty list or an item whose resolved trail is missing raises ValidationError naming the failing item."},
     {"id": "batch.result", "description": "202 or 207 answers BatchResult with accepted/rejected counts and per-item results; a rejected item carries the server's error code, message and field."},
@@ -26,11 +26,11 @@
     {"id": "list.iterate", "description": "Follows next cursors page by page, yielding events lazily; an error on a later page is raised after the earlier events were yielded."},
     {"id": "errors.mapping", "description": "Maps every non-2xx response (and undecodable success bodies) onto the seven error kinds with `status`, `code`, `field` and `retry_after`."},
     {"id": "retry.policy", "description": "Retries transport failures, 500/502/503/504 and 429 (unless the code is `quota_exceeded`) up to `max_retries` times with the same body and keys, honouring `Retry-After` unless it exceeds `max_backoff_ms`."},
-    {"id": "log.enqueue", "description": "`log` validates like `emit`, stores the resolved envelope in the outbox and returns its idempotency key without making a request; a full memory outbox raises OutboxError `outbox_full`; `close` flushes what is pending."},
-    {"id": "log.validation", "description": "Rejects an empty `event` and an unresolved trail with ValidationError before anything is stored."},
-    {"id": "log.batching", "description": "A pass sends the outbox in FIFO batches of at most `batch_size` envelopes per request, keys unchanged."},
-    {"id": "log.hooks", "description": "`pre_send` sees each stored event before its request and may modify or drop it; a raising `pre_send` leaves the event in the outbox and reports a `failed` outcome with OutboxError `hook_failed`; `post_send` receives the original event and its outcome and its exceptions are ignored."},
-    {"id": "log.outcomes", "description": "A 202/207 answers one `post_send` outcome per sent event: accepted/duplicate with the id, rejected with a ValidationError carrying the item's code and field and the response status."},
-    {"id": "log.delivery", "description": "A batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."}
+    {"id": "outbox.enqueue", "description": "With an `outbox`, `emit` validates as usual, stores the resolved envelope and answers EmitResult `queued` true with its idempotency key and no event, without making a request; a full memory outbox raises OutboxError `outbox_full`; `close` flushes what is pending."},
+    {"id": "outbox.validation", "description": "A queued emit rejects an empty `event` and an unresolved trail with ValidationError before anything is stored."},
+    {"id": "outbox.batching", "description": "A pass sends the outbox in FIFO batches of at most `batch_size` envelopes per request, keys unchanged."},
+    {"id": "outbox.hooks", "description": "`pre_send` sees each stored event before its request and may modify or drop it; a raising `pre_send` leaves the event in the outbox and reports a `failed` outcome with OutboxError `hook_failed`; `post_send` receives the original event and its outcome and its exceptions are ignored."},
+    {"id": "outbox.outcomes", "description": "A 202/207 answers one `post_send` outcome per sent event: accepted/duplicate with the id, rejected with a ValidationError carrying the item's code and field and the response status."},
+    {"id": "outbox.delivery", "description": "A batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."}
   ]
 }

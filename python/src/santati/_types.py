@@ -50,11 +50,12 @@ class EventInput(TypedDict):
 
 @dataclass(frozen=True)
 class EmitResult:
-    """The stored event, whether it was a replay, and the key that was used."""
+    """The stored event (None when queued), whether it was a replay, the key that was used, and whether it went to the outbox instead of the API."""
 
-    event: AuditEvent
+    event: AuditEvent | None
     duplicate: bool
     idempotency_key: str
+    queued: bool = False
 
 
 @dataclass(frozen=True)

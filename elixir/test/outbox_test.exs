@@ -17,7 +17,9 @@ defmodule Santati.OutboxTest do
         post_send: fn _event, outcome -> send(test, {:outcome, outcome}) end
       )
 
-    {:ok, _key} = Santati.Outbox.log(pid, %{event: "a.b", trail: "t"})
+    assert {:ok, %Santati.EmitResult{queued: true}} =
+             Santati.Events.emit(%{client | outbox: pid}, %{event: "a.b", trail: "t"})
+
     assert :ok = Santati.Outbox.flush(pid)
 
     assert_receive {:outcome,
@@ -44,7 +46,13 @@ defmodule Santati.OutboxTest do
         post_send: fn _event, outcome -> send(test, {:outcome, outcome}) end
       )
 
-    {:ok, _key} = Santati.Outbox.log(pid, %{event: "a.b", trail: "t", data: {1, 2}})
+    assert {:ok, %Santati.EmitResult{queued: true}} =
+             Santati.Events.emit(%{client | outbox: pid}, %{
+               event: "a.b",
+               trail: "t",
+               data: {1, 2}
+             })
+
     assert :ok = Santati.Outbox.flush(pid)
 
     assert_receive {:outcome,
@@ -57,7 +65,7 @@ defmodule Santati.OutboxTest do
     refute_receive {:outcome, _}
   end
 
-  test "an event emit raises on raises in the caller of log, not in the process" do
+  test "an event emit raises on raises in the caller, not in the process" do
     {:ok, client} = Santati.new(api_key: "sat_sk_x", base_url: "http://127.0.0.1:1")
 
     {:ok, pid} =
@@ -67,13 +75,18 @@ defmodule Santati.OutboxTest do
         flush_interval_ms: 60_000
       )
 
-    {:ok, _key} = Santati.Outbox.log(pid, %{event: "a.b", trail: "t"})
+    emitting = %{client | outbox: pid}
+
+    assert {:ok, %Santati.EmitResult{queued: true}} =
+             Santati.Events.emit(emitting, %{event: "a.b", trail: "t"})
 
     assert_raise Protocol.UndefinedError, fn ->
-      Santati.Outbox.log(pid, %{event: "a.b", trail: "t", data: %{{:x} => 1}})
+      Santati.Events.emit(emitting, %{event: "a.b", trail: "t", data: %{{:x} => 1}})
     end
 
     assert Process.alive?(pid)
-    {:ok, _key} = Santati.Outbox.log(pid, %{event: "c.d", trail: "t"})
+
+    assert {:ok, %Santati.EmitResult{queued: true}} =
+             Santati.Events.emit(emitting, %{event: "c.d", trail: "t"})
   end
 end

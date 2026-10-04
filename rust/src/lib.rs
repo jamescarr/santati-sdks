@@ -18,7 +18,9 @@
 //!         ..Default::default()
 //!     })
 //!     .await?;
-//! println!("{} (duplicate: {})", result.event.id, result.duplicate);
+//! if let Some(event) = &result.event {
+//!     println!("{} (duplicate: {})", event.id, result.duplicate);
+//! }
 //!
 //! let mut stream = std::pin::pin!(events.iterate(ListParams {
 //!     trail: Some("billing".into()),
@@ -31,21 +33,25 @@
 //! # }
 //! ```
 //!
-//! # Fire-and-forget `log`
+//! # Outbox
 //!
-//! [`Santati::log`] validates like `emit`, stores the envelope in an
-//! [`OutboxStore`] (a bounded [`MemoryOutbox`] by default) and returns its
-//! idempotency key without making a request. A background task drains the
-//! outbox in batches; [`Santati::flush`] and [`Santati::close`] drain it
-//! synchronously, so call `close` before the program exits.
+//! With [`Builder::outbox`], [`Events::emit`] validates like a plain `emit`,
+//! stores the envelope in the [`OutboxStore`] and returns at once with
+//! [`EmitResult::queued`] set and its idempotency key, without making a
+//! request. A background task drains the outbox in batches; [`Santati::flush`]
+//! and [`Santati::close`] drain it synchronously, so call `close` before the
+//! program exits.
 //!
 //! ```no_run
-//! use santati::{EventInput, Santati};
+//! use santati::{EventInput, MemoryOutbox, Santati};
 //!
 //! # async fn run() -> Result<(), santati::Error> {
-//! let client = Santati::builder("sat_sk_...").trail("billing").build()?;
-//! let key = client.log(EventInput::new("invoice.voided")).await?;
-//! println!("queued {key}");
+//! let client = Santati::builder("sat_sk_...")
+//!     .trail("billing")
+//!     .outbox(MemoryOutbox::new(10_000)?)
+//!     .build()?;
+//! let result = client.events().emit(EventInput::new("invoice.voided")).await?;
+//! assert!(result.queued);
 //! client.close().await?;
 //! # Ok(())
 //! # }

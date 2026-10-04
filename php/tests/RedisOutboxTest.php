@@ -71,7 +71,7 @@ final class RedisOutboxTest extends TestCase
 
         try {
             $client = new \Santati\Client(apiKey: 'sat_sk_x', trail: 't', outbox: new RedisOutbox($redis, $key));
-            $client->log([
+            $client->events->emit([
                 'event' => 'a.b',
                 'organization_id' => null,
                 'unknown' => 1,

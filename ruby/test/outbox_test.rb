@@ -2,7 +2,7 @@
 
 require_relative "test_helper"
 
-# The outbox behind Santati::Client#log, without a server.
+# The outbox behind a queued Santati::Events#emit, without a server.
 class OutboxTest < Minitest::Test
   def client(store, **options)
     Santati::Client.new(
@@ -17,7 +17,7 @@ class OutboxTest < Minitest::Test
     malformed = Class.new(Hash) { def transform_keys(*, &) = raise("boom") }.new
     santati = client(store, pre_send: ->(_event) { malformed }, post_send: ->(_event, outcome) { outcomes << outcome })
 
-    santati.log(event: "a.b", trail: "t")
+    santati.events.emit(event: "a.b", trail: "t")
     santati.flush
 
     assert_equal 1, outcomes.length
@@ -28,12 +28,12 @@ class OutboxTest < Minitest::Test
     santati.close
   end
 
-  def test_log_snapshots_the_event
+  def test_queued_emit_snapshots_the_event
     store = Santati::MemoryOutbox.new
     santati = client(store)
     meta = {"a" => "1"}
 
-    santati.log(event: "a.b", trail: "t", metadata: meta)
+    santati.events.emit(event: "a.b", trail: "t", metadata: meta)
     meta["a"] = "2"
 
     assert_equal({"a" => "1"}, store.claim(1).first.event[:metadata])

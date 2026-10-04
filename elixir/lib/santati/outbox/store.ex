@@ -1,6 +1,6 @@
 defmodule Santati.Outbox.Store do
   @moduledoc """
-  The behaviour of an outbox store: where `Santati.Outbox` keeps logged events
+  The behaviour of an outbox store: where `Santati.Outbox` keeps queued events
   until the worker has sent them.
 
   The server owns the store's state and threads it through every call, so a

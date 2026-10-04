@@ -93,17 +93,22 @@ client
 `stream/2` yields `SantatiCore.Model.AuditEvent` structs and raises the error of
 the page that failed — events from earlier pages have already been yielded.
 
-## Outbox and `log`
+## Outbox
 
-`Santati.log/2` is a fire-and-forget emit: it validates the event like `emit/2`,
-stores it in an outbox and answers the idempotency key. A `Santati.Outbox`
-process sends the outbox in batches in the background; `pre_send` and
-`post_send` hooks observe every event, and stopping the process flushes it.
+Without an outbox, `Santati.Events.emit/2` sends the event. Pass `outbox:` — a
+`Santati.Outbox` process, by pid or registered name — to `Santati.new/1` and
+`emit/2` is fire-and-forget: it validates the event, stores it in the outbox and
+answers `{:ok, %Santati.EmitResult{queued: true, event: nil}}` with the
+idempotency key. The `Santati.Outbox` process sends the outbox in batches in the
+background; `pre_send` and `post_send` hooks observe every event, and stopping
+the process flushes it.
 
 ```elixir
 {:ok, _pid} = Santati.Outbox.start_link(client: client, name: MyApp.Santati)
+{:ok, client} = Santati.new(api_key: "sat_sk_...", trail: "billing", outbox: MyApp.Santati)
 
-{:ok, key} = Santati.log(MyApp.Santati, %{event: "invoice.voided"})
+{:ok, %Santati.EmitResult{queued: true}} =
+  Santati.Events.emit(client, %{event: "invoice.voided"})
 
 Santati.Outbox.stop(MyApp.Santati)
 ```
@@ -140,11 +145,11 @@ end
 
 An event JSON cannot represent (a tuple, a pid or a reference anywhere in it)
 is a bug in the caller, not a failed request: `emit/2` and `emit_batch/2` raise
-`Protocol.UndefinedError`, and so does `Santati.log/2` when the bad term is a
-map key. A bad value is accepted by `Santati.log/2` with the memory store; the
-outbox then reports its batch to `post_send` as `Santati.OutboxError`
-`hook_failed` and drops it. The Redis store refuses it in `Santati.log/2` as
-`Santati.OutboxError` `store_unavailable`.
+`Protocol.UndefinedError`, and so does a queued `Santati.Events.emit/2` when the
+bad term is a map key. A bad value is accepted by a queued `emit/2` with the
+memory store; the outbox then reports its batch to `post_send` as
+`Santati.OutboxError` `hook_failed` and drops it. The Redis store refuses it in a
+queued `emit/2` as `Santati.OutboxError` `store_unavailable`.
 
 ## Retries
 

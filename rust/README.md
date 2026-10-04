@@ -38,7 +38,9 @@ async fn main() -> Result<(), santati::Error> {
             ..Default::default()
         })
         .await?;
-    println!("{} (duplicate: {})", result.event.id, result.duplicate);
+    if let Some(event) = &result.event {
+        println!("{} (duplicate: {})", event.id, result.duplicate);
+    }
 
     // Emit a batch: a 207 is a `BatchResult` whose rejected items carry the
     // server's error, not a failure of the call.
@@ -88,6 +90,7 @@ async fn main() -> Result<(), santati::Error> {
 | `max_retries` | 2 | retries after the first attempt |
 | `backoff(initial, max)` | 250ms, 8s | exponential backoff bounds |
 | `header(name, value)` | none | extra header on every request |
+| `outbox(store)` | none | when set, `emit` queues into `store` instead of sending |
 
 Building fails with a `ValidationError` (status `None`) for an empty `api_key`
 (field `api_key`) or an `Authorization` header (field `headers`). Redirects are
@@ -96,27 +99,32 @@ failures, 500/502/503/504 and 429 (unless the code is `quota_exceeded`) are
 retried with the identical request, honouring `Retry-After` when the server
 sends one.
 
-## Outbox and `log`
+## Outbox
 
-`log` is fire-and-forget: it validates like `emit`, stores the envelope in an
-outbox and returns the idempotency key. A background task sends the outbox in
-batches; `close` stops it and drains what is left, so call it before exiting.
+Without an outbox, `emit` sends the event. With `Builder::outbox`, `emit` is
+fire-and-forget: it validates like a plain `emit`, stores the envelope in the
+outbox and returns at once with `queued` set and no event, without making a
+request. A background task sends the outbox in batches; `close` stops it and
+drains what is left, so call it before exiting.
 
 ```rust
-use santati::{EventInput, Santati};
+use santati::{EventInput, MemoryOutbox, Santati};
 
 #[tokio::main]
 async fn main() -> Result<(), santati::Error> {
-    let client = Santati::builder("sat_sk_...").trail("billing").build()?;
-    let key = client.log(EventInput::new("invoice.voided")).await?;
-    println!("queued {key}");
+    let client = Santati::builder("sat_sk_...")
+        .trail("billing")
+        .outbox(MemoryOutbox::new(10_000)?)
+        .build()?;
+    let result = client.events().emit(EventInput::new("invoice.voided")).await?;
+    assert!(result.queued);
     client.close().await?;
     Ok(())
 }
 ```
 
-The default store is an in-memory `MemoryOutbox` (10 000 entries). Tune it with
-`batch_size`, `flush_interval`, `pre_send`, `post_send` and `outbox` on the
+`MemoryOutbox` is the in-process store (lost on exit). Tune the worker with
+`batch_size`, `flush_interval`, `pre_send` and `post_send` on the
 builder. For a Redis Streams store, enable the optional `redis` feature
 (`santati = { version = "0.1", features = ["redis"] }`) and pass
 `RedisOutbox::new(connection_manager)` to `Builder::outbox`.

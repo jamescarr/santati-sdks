@@ -8,15 +8,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `Santati.log()`: fire-and-forget emit through an outbox — in memory by
-  default (`MemoryOutbox`), or Redis Streams via
-  `santati.outbox.redis.RedisOutbox` (`santati[redis]`) — sent in the
-  background in batches of `batch_size` every `flush_interval_ms`, with
-  `pre_send`/`post_send` hooks, `Santati.flush()`, and `OutboxError`.
-  `close()` now stops the worker and flushes the outbox first.
-  `log()` stores a copy of the event; a batch that fails with anything but a
-  `SantatiError` (e.g. a malformed `pre_send` result) is reported to
-  `post_send` as `OutboxError` `hook_failed` and dropped, never raised.
+- An opt-in outbox: with `outbox=` (`MemoryOutbox`, or Redis Streams via
+  `santati.outbox.redis.RedisOutbox`, `santati[redis]`) `events.emit` stores the
+  event and returns at once with `EmitResult.queued` true; a background worker
+  sends the outbox in batches of `batch_size` every `flush_interval_ms`
+  through `emit_batch`, with `pre_send`/`post_send` hooks, `Santati.flush()`,
+  and `OutboxError`. `close()` now stops the worker and flushes the outbox
+  first. A queued `emit` stores a copy of the event; a batch that fails with
+  anything but a `SantatiError` (e.g. a malformed `pre_send` result) is
+  reported to `post_send` as `OutboxError` `hook_failed` and dropped, never
+  raised.
+
+### Changed
+
+- `EmitResult` has a new `queued` field, and its `event` is `None` for a
+  queued emit.
 
 ### Fixed
 

@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// MemoryOutbox is the default OutboxStore: a bounded FIFO queue held in
+// MemoryOutbox is an in-process OutboxStore: a bounded FIFO queue held in
 // memory, safe for concurrent use. Events are lost when the process exits;
 // use the redisoutbox package for a durable store.
 type MemoryOutbox struct {
@@ -86,7 +86,7 @@ func (m *MemoryOutbox) Release(_ context.Context, ids []string) error {
 	return nil
 }
 
-// outbox is the per-client log state: the store, the hooks and the worker.
+// outbox is the per-client outbox state: the store, the hooks and the worker.
 type outbox struct {
 	client    *Client
 	store     OutboxStore
@@ -98,8 +98,8 @@ type outbox struct {
 	// pass serialises passes: the worker's ticks and Flush never overlap.
 	pass sync.Mutex
 
-	// life guards started/closed. Log holds it for reading across the
-	// enqueue so Close waits for in-flight logs before the final flush.
+	// life guards started/closed. enqueue holds it for reading across the
+	// store write so Close waits for in-flight emits before the final flush.
 	life    sync.RWMutex
 	started atomic.Bool
 	closed  bool
@@ -107,51 +107,49 @@ type outbox struct {
 	done    chan struct{}
 }
 
-// Log validates the event exactly like Events.Emit, stores the resolved event
-// in the outbox and returns its idempotency key. It never makes a request; a
-// background worker sends the event later. The first call starts the worker.
+// enqueue stores the already-resolved event in the store. It never makes a
+// request; a background worker sends the event later, and the first call
+// starts the worker.
 //
 // Failures of the store are a *Error with kind KindOutbox: code "outbox_full"
 // for a full MemoryOutbox, "store_unavailable" for any other store failure and
 // "closed" after Close.
-func (c *Client) Log(ctx context.Context, input EventInput) (string, error) {
-	envelope, key, err := c.envelope(input, "event", "trail")
-	if err != nil {
-		return "", err
-	}
-	// A snapshot, so later changes to the caller's maps and slices do not reach the stored event.
-	stored := cloneEvent(input)
-	stored.Trail = envelope.Trail
-	stored.IdempotencyKey = key
-
-	o := c.outbox
+func (o *outbox) enqueue(ctx context.Context, stored EventInput) error {
 	o.life.RLock()
 	if o.closed {
 		o.life.RUnlock()
-		return "", outboxError("closed", "client is closed")
+		return outboxError("closed", "client is closed")
 	}
-	err = o.store.Enqueue(ctx, stored)
+	err := o.store.Enqueue(ctx, stored)
 	o.life.RUnlock()
 	if err != nil {
-		return "", storeError(err)
+		return storeError(err)
 	}
 	o.start()
-	return key, nil
+	return nil
 }
 
 // Flush runs one outbox pass synchronously: it sends everything pending in
 // batches of the configured size, stopping early after a retryable failure.
 // It returns an OutboxError "store_unavailable" if the store fails during the
 // pass; send failures never fail Flush, they are reported to the PostSendHook.
+// Without an outbox, Flush returns nil at once.
 func (c *Client) Flush(ctx context.Context) error {
+	if c.outbox == nil {
+		return nil
+	}
 	return c.outbox.flush(ctx)
 }
 
 // Close stops the outbox worker, waits for a pass in progress, then runs a
 // final Flush. It is idempotent: later calls return nil without another pass.
-// After Close, Log fails with OutboxError "closed".
+// After Close, a queued Emit fails with OutboxError "closed". Without an
+// outbox, Close returns nil and Emit keeps working.
 func (c *Client) Close(ctx context.Context) error {
 	o := c.outbox
+	if o == nil {
+		return nil
+	}
 	o.life.Lock()
 	if o.closed {
 		o.life.Unlock()
@@ -323,7 +321,7 @@ func outcomeFor(item BatchItem, status int) SendOutcome {
 }
 
 // cloneEvent deep-copies the reference members of an event so neither the
-// caller of Log nor a hook that mutates its argument in place can change the
+// caller of a queued Emit nor a hook that mutates its argument in place can change the
 // stored original.
 func cloneEvent(e EventInput) EventInput {
 	if e.Actor != nil {

@@ -5,7 +5,10 @@
     with santati.Santati("sat_sk_...", trail="billing") as client:
         result = client.events.emit("invoice.voided", organization_id="org_acme")
         print(result.event.id, result.duplicate)
-        client.log("invoice.paid", organization_id="org_acme")  # sent in the background
+
+    # With an outbox, emit returns at once and a background worker sends the event.
+    with santati.Santati("sat_sk_...", trail="billing", outbox=santati.MemoryOutbox()) as client:
+        client.events.emit("invoice.paid", organization_id="org_acme")
 
 See ``docs/sdk-surface.md`` in the repository for the surface every Santati SDK
 implements.

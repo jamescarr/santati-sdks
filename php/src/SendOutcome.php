@@ -7,7 +7,7 @@ namespace Santati;
 use Santati\Exception\SantatiException;
 
 /**
- * What happened to one logged event, as handed to the `post_send` hook.
+ * What happened to one queued event, as handed to the `post_send` hook.
  *
  * `status` is `accepted`, `duplicate`, `rejected` or `failed`.
  */

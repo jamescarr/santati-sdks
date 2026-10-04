@@ -1,6 +1,6 @@
-"""Outbox stores for :meth:`santati.Santati.log`.
+"""Outbox stores for a client's ``outbox`` option.
 
-:class:`MemoryOutbox` is the default; :mod:`santati.outbox.redis` holds the
+:class:`MemoryOutbox` is the in-process store; :mod:`santati.outbox.redis` holds the
 Redis Streams store (``pip install "santati[redis]"``). Implement
 :class:`OutboxStore` for anything else.
 """

@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use libtest_mimic::{Arguments, Failed, Trial};
-use santati::{AuditEvent, Error, EventInput, Events, ListParams, Santati, StreamExt};
+use santati::{AuditEvent, EmitResult, Error, EventInput, Events, ListParams, Santati, StreamExt};
 use serde_json::{json, Map, Value};
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
@@ -222,12 +222,14 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
         builder = builder.flush_interval(Duration::from_millis(interval));
     }
     let outcomes: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
-    if case["operation"] == "log" {
-        if let Some(max_pending) = config.get("max_pending").and_then(Value::as_u64) {
-            match santati::MemoryOutbox::new(max_pending as usize) {
-                Ok(store) => builder = builder.outbox(store),
-                Err(error) => return compare_outcome(case, gateway, Err(&error)).await,
-            }
+    if case["operation"] == "emit_outbox" {
+        let max_pending = config
+            .get("max_pending")
+            .and_then(Value::as_u64)
+            .unwrap_or(10_000) as usize;
+        match santati::MemoryOutbox::new(max_pending) {
+            Ok(store) => builder = builder.outbox(store),
+            Err(error) => return compare_outcome(case, gateway, Err(&error)).await,
         }
         builder = register_hooks(builder, input.get("hooks"), outcomes.clone());
     }
@@ -241,13 +243,7 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
                 "emit" => events
                     .emit(event_input(&input["event"]))
                     .await
-                    .map(|result| {
-                        json!({
-                            "event": result.event,
-                            "duplicate": result.duplicate,
-                            "idempotency_key": result.idempotency_key,
-                        })
-                    }),
+                    .map(emit_json),
                 "emit_batch" => {
                     let batch = input
                         .get("events")
@@ -256,12 +252,12 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
                         .unwrap_or_default();
                     events.emit_batch(batch).await.map(batch_json)
                 }
-                "log" => {
-                    let (keys, failure) = run_log(client, input).await;
+                "emit_outbox" => {
+                    let (results, failure) = run_emit_outbox(client, input).await;
                     match failure {
                         Some(error) => Err(error),
                         None => Ok(json!({
-                            "keys": keys,
+                            "results": results,
                             "outcomes": outcomes.lock().unwrap().clone(),
                         })),
                     }
@@ -291,9 +287,19 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
     compare_outcome(case, gateway, outcome.as_ref()).await
 }
 
-/// Log every event, stopping at the first SDK error, then close the client.
-async fn run_log(client: &Santati, input: &Value) -> (Vec<String>, Option<Error>) {
-    let mut keys = Vec::new();
+fn emit_json(result: EmitResult) -> Value {
+    json!({
+        "event": result.event,
+        "duplicate": result.duplicate,
+        "idempotency_key": result.idempotency_key,
+        "queued": result.queued,
+    })
+}
+
+/// Emit every event through the outbox, stopping at the first SDK error, then
+/// close the client.
+async fn run_emit_outbox(client: &Santati, input: &Value) -> (Vec<Value>, Option<Error>) {
+    let mut results = Vec::new();
     let mut failure = None;
     for event in input
         .get("events")
@@ -301,8 +307,8 @@ async fn run_log(client: &Santati, input: &Value) -> (Vec<String>, Option<Error>
         .map(Vec::as_slice)
         .unwrap_or_default()
     {
-        match client.log(event_input(event)).await {
-            Ok(key) => keys.push(key),
+        match client.events().emit(event_input(event)).await {
+            Ok(result) => results.push(emit_json(result)),
             Err(error) => {
                 failure = Some(error);
                 break;
@@ -313,7 +319,7 @@ async fn run_log(client: &Santati, input: &Value) -> (Vec<String>, Option<Error>
     if failure.is_none() {
         failure = closed.err();
     }
-    (keys, failure)
+    (results, failure)
 }
 
 /// The runner's hooks per `conformance/README.md`; `post_send` is always

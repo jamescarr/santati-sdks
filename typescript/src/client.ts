@@ -28,7 +28,7 @@ import {
   ValidationError,
 } from "./errors.js";
 import type { SantatiErrorOptions } from "./errors.js";
-import { MemoryOutbox, OutboxWorker } from "./outbox.js";
+import { OutboxWorker } from "./outbox.js";
 import { withRetries, type RetryOptions } from "./retry.js";
 import type {
   ActorInput,
@@ -68,7 +68,7 @@ export interface SantatiOptions {
   maxBackoffMs?: number;
   /** Extra headers on every request; may not carry `authorization`. */
   headers?: Record<string, string>;
-  /** Where `log` keeps events until sent; default `new MemoryOutbox()`. */
+  /** When set, `events.emit` stores events here for the background worker instead of sending them. */
   outbox?: OutboxStore;
   /** Envelopes per outbox request, `1..500`; default 100. */
   batchSize?: number;
@@ -86,7 +86,7 @@ interface ClientConfig extends RetryOptions {
   trail?: string;
   timeoutMs: number;
   headers: Record<string, string>;
-  outbox: OutboxStore;
+  outbox?: OutboxStore;
   batchSize: number;
   flushIntervalMs: number;
   preSend?: PreSendHook;
@@ -131,7 +131,7 @@ function resolve(options: SantatiOptions): ClientConfig {
     initialBackoffMs: options.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS,
     maxBackoffMs: options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS,
     headers,
-    outbox: options.outbox ?? new MemoryOutbox(),
+    outbox: options.outbox,
     batchSize,
     flushIntervalMs,
     preSend: options.preSend,
@@ -315,6 +315,8 @@ function decodeJson<T>(raw: RawResponse, fromJSON: (json: unknown) => T): T {
 export class Events {
   private readonly api: AuditEventsApi;
   private readonly config: ClientConfig;
+  /** The outbox worker when the client has an `outbox`. @internal */
+  readonly outbox: OutboxWorker | undefined;
 
   constructor(config: ClientConfig) {
     this.config = config;
@@ -330,12 +332,35 @@ export class Events {
         },
       }),
     );
+    this.outbox =
+      config.outbox === undefined
+        ? undefined
+        : new OutboxWorker(
+            this,
+            config.outbox,
+            config.batchSize,
+            config.flushIntervalMs,
+            config.preSend,
+            config.postSend,
+          );
   }
 
-  /** Indexes one event. A replay of the same key answers `duplicate: true`. */
+  /**
+   * Indexes one event. A replay of the same key answers `duplicate: true`.
+   * With an `outbox`, stores the event for the background worker and returns
+   * at once with `queued: true` and no event; never makes a request. Rejects
+   * with `OutboxError` when the store refuses or the client is closed.
+   */
   async emit(input: EventInput): Promise<EmitResult> {
     const idempotencyKey = input.idempotencyKey ?? crypto.randomUUID();
     const eventIngestRequest = buildEnvelope(this.config.trail, input, "", idempotencyKey);
+    if (this.outbox !== undefined) {
+      // A snapshot, so later changes to the caller's objects do not reach the stored event.
+      await this.outbox.enqueue(
+        structuredClone({ ...input, trail: eventIngestRequest.trail, idempotencyKey }),
+      );
+      return { event: null, duplicate: false, idempotencyKey, queued: true };
+    }
     const raw = await withRetries(
       () => this.send(() => this.api.eventsCreateRaw({ eventIngestRequest }, this.init())),
       this.config,
@@ -345,6 +370,7 @@ export class Events {
       event: decodeJson(raw, AuditEventFromJSON),
       duplicate: raw.status === 200,
       idempotencyKey,
+      queued: false,
     };
   }
 
@@ -449,42 +475,21 @@ export class Events {
 export class Santati {
   /** Emit, batch, list and iterate on `/api/v0/events/`. */
   readonly events: Events;
-  private readonly config: ClientConfig;
-  private readonly outbox: OutboxWorker;
 
   constructor(options: SantatiOptions) {
-    this.config = resolve(options);
-    this.events = new Events(this.config);
-    this.outbox = new OutboxWorker(
-      this.events,
-      this.config.outbox,
-      this.config.batchSize,
-      this.config.flushIntervalMs,
-      this.config.preSend,
-      this.config.postSend,
-    );
+    this.events = new Events(resolve(options));
+  }
+
+  /** Runs one outbox pass now. Rejects with `OutboxError` if the store fails. No-op without an outbox. */
+  flush(): Promise<void> {
+    return this.events.outbox?.flush() ?? Promise.resolve();
   }
 
   /**
-   * Fire-and-forget emit: validates like `events.emit`, stores the resolved
-   * event in the outbox and returns its idempotency key. Never makes a
-   * request; a background worker sends it. Rejects with `OutboxError` when the
-   * store refuses or the client is closed.
+   * Stops the outbox worker, then flushes once. Idempotent; a queued `emit`
+   * afterwards rejects with `closed`. No-op without an outbox.
    */
-  async log(input: EventInput): Promise<string> {
-    const key = input.idempotencyKey ?? crypto.randomUUID();
-    const envelope = buildEnvelope(this.config.trail, input, "", key);
-    // A snapshot, so later changes to the caller's objects do not reach the stored event.
-    return this.outbox.log(structuredClone({ ...input, trail: envelope.trail, idempotencyKey: key }));
-  }
-
-  /** Runs one outbox pass now. Rejects with `OutboxError` if the store fails. */
-  flush(): Promise<void> {
-    return this.outbox.flush();
-  }
-
-  /** Stops the worker, then flushes once. Idempotent; `log` afterwards rejects with `closed`. */
   close(): Promise<void> {
-    return this.outbox.close();
+    return this.events.outbox?.close() ?? Promise.resolve();
   }
 }
