@@ -88,10 +88,17 @@ defmodule Santati.Outbox do
 
   Answers `{:error, %Santati.ValidationError{}}` like `Santati.Events.emit/2`
   and `{:error, %Santati.OutboxError{}}` when the store refuses
-  (`outbox_full`) or fails (`store_unavailable`).
+  (`outbox_full`) or fails (`store_unavailable`). An event `emit/2` raises on
+  (e.g. a map key with no `String.Chars`) raises the same exception in the
+  caller; the process keeps running.
   """
   @spec log(GenServer.server(), map() | keyword()) :: {:ok, String.t()} | {:error, Exception.t()}
-  def log(server, event), do: GenServer.call(server, {:log, event})
+  def log(server, event) do
+    case GenServer.call(server, {:log, event}) do
+      {:raise, error, stacktrace} -> reraise error, stacktrace
+      reply -> reply
+    end
+  end
 
   @doc """
   Runs one pass synchronously: answers `:ok`, or `{:error, exception}` with a
@@ -148,10 +155,11 @@ defmodule Santati.Outbox do
 
   @impl true
   def handle_call({:log, event}, _from, state) do
-    with {:ok, envelope, key} <- Events.build_envelope(state.client, event),
+    with {:ok, envelope, key} <- build_envelope(state.client, event),
          {:ok, state} <- store(state, :enqueue, [envelope]) do
       {:reply, {:ok, key}, arm(state)}
     else
+      {:raise, _error, _stacktrace} = raised -> {:reply, raised, state}
       {:error, error} -> {:reply, {:error, error}, state}
       {:error, error, state} -> {:reply, {:error, error}, state}
     end
@@ -347,6 +355,13 @@ defmodule Santati.Outbox do
 
         if retryable?(error), do: {[], Enum.into(ids, released)}, else: {ids, released}
     end
+  end
+
+  # A raise belongs to the caller of log/2: here it would take every pending event down with it.
+  defp build_envelope(client, event) do
+    Events.build_envelope(client, event)
+  rescue
+    error -> {:raise, error, __STACKTRACE__}
   end
 
   # E.g. a malformed :pre_send result: a failed, non-retryable outcome instead of a crashed Task.

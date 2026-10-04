@@ -4,6 +4,9 @@ defmodule Santati.Events do
 
   All functions take a `Santati.Client`. Reads never apply the client's default
   trail; an emit resolves the trail from the event first, then from the client.
+
+  An event JSON cannot represent (a tuple, a pid or a reference anywhere in
+  it) raises `Protocol.UndefinedError`; it is never a `Santati.TransportError`.
   """
 
   alias Santati.{BatchItem, BatchItemError, BatchResult, Client, EmitResult, Errors, EventPage}

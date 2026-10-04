@@ -138,6 +138,13 @@ case Santati.Events.emit(client, %{event: "invoice.voided"}) do
 end
 ```
 
+An event JSON cannot represent (a tuple, a pid or a reference anywhere in it)
+is a bug in the caller, not a failed request: `emit/2` and `emit_batch/2` raise
+`Protocol.UndefinedError`, and so does `Santati.log/2` when the bad term is a
+map key. A bad value reaches `Santati.log/2`'s store unchanged; the outbox
+reports its batch to `post_send` as `Santati.OutboxError` `hook_failed` and
+drops it.
+
 ## Retries
 
 An emit, a batch and a list retry transport failures, `500`/`502`/`503`/`504`
