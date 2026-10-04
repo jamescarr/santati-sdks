@@ -279,10 +279,9 @@ One base type, eight kinds, each with `status` (int|null), `code`
 |any other non-2xx, an unexpected 2xx, an undecodable 2xx body|`ApiError`|
 |the outbox store refused or failed (`outbox_full`, `store_unavailable`, `closed`), a `pre_send` hook raised or the send raised a non-SDK error (`hook_failed`)|`OutboxError` (status null, `code` as listed)|
 
-A request body JSON cannot represent is a caller bug, not a missing HTTP
-response. Elixir: a tuple, pid or reference in an event raises the encoder's
+Elixir: a tuple, pid or reference in an event raises the JSON encoder's
 `Protocol.UndefinedError` from `emit`/`emit_batch` (no request, no retry), and
-from `log` when the term is a map key; it is never a `TransportError`.
+from `log` when the term is a map key; it is not a `TransportError`.
 
 Error-body parsing: a JSON object with an `error` object holding a string
 `code` → `code`, `field` (string or null) and `message` come from it; a JSON
