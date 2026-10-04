@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Santati.log()`: fire-and-forget emit through an outbox — in memory by
+  default (`MemoryOutbox`), or Redis Streams via
+  `santati.outbox.redis.RedisOutbox` (`santati[redis]`) — sent in the
+  background in batches of `batch_size` every `flush_interval_ms`, with
+  `pre_send`/`post_send` hooks, `Santati.flush()`, and `OutboxError`.
+  `close()` now stops the worker and flushes the outbox first.
+  `log()` stores a copy of the event; a batch that fails with anything but a
+  `SantatiError` (e.g. a malformed `pre_send` result) is reported to
+  `post_send` as `OutboxError` `hook_failed` and dropped, never raised.
+
+### Fixed
+
+- `events.emit_batch` raises `santati.ValidationError` (with `field`) for an
+  item the request model rejects, such as an actor without `type`, instead of
+  a raw `pydantic.ValidationError`.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added

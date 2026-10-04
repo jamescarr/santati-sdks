@@ -31,12 +31,33 @@
 //! # }
 //! ```
 //!
+//! # Fire-and-forget `log`
+//!
+//! [`Santati::log`] validates like `emit`, stores the envelope in an
+//! [`OutboxStore`] (a bounded [`MemoryOutbox`] by default) and returns its
+//! idempotency key without making a request. A background task drains the
+//! outbox in batches; [`Santati::flush`] and [`Santati::close`] drain it
+//! synchronously, so call `close` before the program exits.
+//!
+//! ```no_run
+//! use santati::{EventInput, Santati};
+//!
+//! # async fn run() -> Result<(), santati::Error> {
+//! let client = Santati::builder("sat_sk_...").trail("billing").build()?;
+//! let key = client.log(EventInput::new("invoice.voided")).await?;
+//! println!("queued {key}");
+//! client.close().await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
 //! The surface this implements, and its error kinds and retry policy, are
 //! documented in `docs/sdk-surface.md`.
 
 mod client;
 mod error;
 mod events;
+mod outbox;
 mod retry;
 mod types;
 
@@ -45,6 +66,7 @@ mod types;
 #[allow(dead_code, unused_imports, unused_variables, clippy::all)]
 mod models;
 
+pub use async_trait::async_trait;
 pub use client::{
     Builder, Santati, DEFAULT_BASE_URL, DEFAULT_INITIAL_BACKOFF_MS, DEFAULT_MAX_BACKOFF_MS,
     DEFAULT_MAX_RETRIES, DEFAULT_TIMEOUT_MS,
@@ -53,6 +75,9 @@ pub use error::{Error, ErrorDetails, ErrorKind};
 pub use events::Events;
 pub use futures_util::StreamExt;
 pub use models::{AuditEvent, EventActor, EventTarget};
+#[cfg(feature = "redis")]
+pub use outbox::redis::RedisOutbox;
+pub use outbox::{MemoryOutbox, OutboxEntry, OutboxStore, SendOutcome, SendStatus};
 pub use types::{
     ActorInput, BatchItem, BatchItemError, BatchResult, BatchStatus, EmitResult, EventInput,
     EventPage, ListParams, TargetInput,

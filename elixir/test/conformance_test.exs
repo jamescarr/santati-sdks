@@ -36,7 +36,8 @@ defmodule Santati.ConformanceTest do
     Santati.RateLimitedError => "RateLimitedError",
     Santati.ServerError => "ServerError",
     Santati.TransportError => "TransportError",
-    Santati.ApiError => "ApiError"
+    Santati.ApiError => "ApiError",
+    Santati.OutboxError => "OutboxError"
   }
 
   for test_case <- @cases do
@@ -117,8 +118,110 @@ defmodule Santati.ConformanceTest do
     error -> {:error, error}
   end
 
+  defp invoke(client, input, "log") do
+    test_pid = self()
+    hooks = input["hooks"] || %{}
+    input_client = input["client"]
+
+    store =
+      case input_client["max_pending"] do
+        nil -> Santati.Outbox.Memory
+        max_pending -> {Santati.Outbox.Memory, max_pending: max_pending}
+      end
+
+    options =
+      [
+        client: client,
+        store: store,
+        batch_size: input_client["batch_size"],
+        flush_interval_ms: input_client["flush_interval_ms"],
+        pre_send: pre_send(hooks["pre_send"]),
+        post_send: post_send(test_pid, hooks["post_send"])
+      ]
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+    case Santati.Outbox.start_link(options) do
+      {:ok, outbox} ->
+        {keys, error} =
+          Enum.reduce_while(input["events"], {[], nil}, fn event, {keys, nil} ->
+            case Santati.Outbox.log(outbox, event) do
+              {:ok, key} -> {:cont, {[key | keys], nil}}
+              {:error, error} -> {:halt, {keys, error}}
+            end
+          end)
+
+        :ok = Santati.Outbox.stop(outbox)
+        outcomes = collect_outcomes([])
+
+        if error do
+          {:error, error}
+        else
+          {:ok, %{"keys" => Enum.reverse(keys), "outcomes" => outcomes}}
+        end
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
   defp invoke(_client, _input, operation) do
     flunk("unknown conformance operation #{inspect(operation)}")
+  end
+
+  defp pre_send(nil), do: nil
+
+  defp pre_send(%{"raise" => true}), do: fn _event -> raise "conformance pre_send" end
+
+  defp pre_send(config) do
+    drop = config["drop_events"] || []
+    metadata = config["set_metadata"]
+
+    fn event ->
+      cond do
+        event["event"] in drop ->
+          nil
+
+        is_map(metadata) ->
+          Map.update(event, "metadata", metadata, &Map.merge(&1 || %{}, metadata))
+
+        true ->
+          event
+      end
+    end
+  end
+
+  defp post_send(test_pid, config) do
+    fn event, outcome ->
+      error =
+        outcome.error &&
+          %{
+            "kind" => Map.fetch!(@error_kinds, outcome.error.__struct__),
+            "status" => outcome.error.status,
+            "code" => outcome.error.code,
+            "field" => outcome.error.field,
+            "retry_after" => outcome.error.retry_after
+          }
+
+      send(test_pid, {
+        :outcome,
+        %{
+          "event" => event,
+          "status" => Atom.to_string(outcome.status),
+          "id" => outcome.id,
+          "error" => error
+        }
+      })
+
+      if config && config["raise"], do: raise("conformance post_send")
+    end
+  end
+
+  defp collect_outcomes(acc) do
+    receive do
+      {:outcome, outcome} -> collect_outcomes([outcome | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
   end
 
   defp wire({:ok, value}), do: {:ok, to_wire(value)}

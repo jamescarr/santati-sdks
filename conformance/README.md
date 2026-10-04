@@ -22,13 +22,16 @@ and the registry and then runs each SDK's native runner.
 {
   "id": "globally-unique-string",   // the test name every SDK registers
   "feature": "<features[].id>",
-  "operation": "emit" | "emit_batch" | "list" | "iterate",
+  "operation": "emit" | "emit_batch" | "list" | "iterate" | "log",
   "input": {
     "client": { "api_key": "sat_sk_…", "trail"?, "timeout_ms"?, "max_retries"?,
-                "initial_backoff_ms"?, "max_backoff_ms"?, "headers"?, "base_path"? },
+                "initial_backoff_ms"?, "max_backoff_ms"?, "headers"?, "base_path"?,
+                // log only:
+                "batch_size"?, "flush_interval_ms"?, "max_pending"? },
     "gateway": Gateway,
     // operation-specific:
-    "event"? | "events"? | "params"?
+    "event"? | "events"? | "params"?,
+    "hooks"?   // log only, see "The log operation"
   },
   "expect": {
     // exactly one of:
@@ -57,7 +60,9 @@ sleeps after recording the request and before the status line.
 - `ok` shapes: emit `{"event", "duplicate", "idempotency_key"}`; emit_batch
   `{"accepted", "rejected", "results": [{"index", "status", "id"?, "error"?:
   {"code", "message", "field"}}]}`; list `{"results", "next_cursor"}`;
-  iterate `[…]`. Read models are serialized with the generated model's own
+  iterate `[…]`; log `{"keys": [string…], "outcomes": [{"event": <wire
+  envelope>, "status", "id"?, "error"?: {"kind", "status", "code", "field",
+  "retry_after"}}]}`. Read models are serialized with the generated model's own
   serializer back to wire (snake_case) JSON. Comparison is deep equality after
   removing every object member whose value is null, recursively, on both sides.
 - `error`: `kind` is compared by exact type (no subclass matching) through the
@@ -75,6 +80,32 @@ sleeps after recording the request and before the status line.
 Query values in vectors use only `A-Z a-z 0-9 - _ . : + =`: every generated
 core encodes those identically, while spaces, `/`, `~`, `*`, `!`, `'`, `(` and
 `)` differ across encoders.
+
+### The `log` operation
+
+`input.events` are the events logged, in order. `input.client.batch_size` and
+`flush_interval_ms` are passed to the client as given (vectors use `60000` so
+the worker's tick never races `close()`); `max_pending`, when present, makes
+the client's store `MemoryOutbox(max_pending)` (otherwise the default store).
+`input.hooks` is `{"pre_send"?: {"set_metadata"?: object, "drop_events"?:
+[string], "raise"?: true}, "post_send"?: {"raise"?: true}}`.
+
+The runner:
+
+1. Builds the client. When `hooks.pre_send` is present it registers a
+   `pre_send` that throws a plain non-SDK exception with `raise: true` (Go:
+   `panic`, Rust: `panic!`), else returns null for an event whose `event` is
+   in `drop_events`, else merges `set_metadata` into the event's `metadata`
+   (`{...existing, ...set_metadata}`) when given, else returns the event
+   unchanged. It **always** registers a `post_send` that appends `{event:
+   <the stored event as wire JSON>, status, id, error: {kind, status, code,
+   field, retry_after}}` (the error rendered like `expect.error`, kind by exact
+   type) to the outcomes, then throws when `hooks.post_send.raise`.
+2. Calls `log` for each event in order, collecting the returned keys; an SDK
+   error stops the logging and is remembered.
+3. Calls `close()` (Elixir: stops the `Santati.Outbox` process).
+4. Reports the remembered error (the requests are still asserted), else
+   `{"keys", "outcomes"}`.
 
 ## Runner contract
 

@@ -21,7 +21,17 @@
 //	}
 //	_ = result
 //
+// Log is the fire-and-forget counterpart of Events.Emit: it validates the
+// event, stores it in an outbox (in memory by default; the redisoutbox
+// package offers a Redis-backed store) and returns its idempotency key. A
+// background worker sends the outbox in batches, PreSend and PostSend hooks
+// observe each event, and Flush or Close drain it synchronously:
+//
+//	key, err := client.Log(ctx, santati.EventInput{Event: "invoice.paid"})
+//	...
+//	err = client.Close(ctx)
+//
 // Errors from the API are always a *Error, whose Kind tells the caller which
 // failure it was (validation, auth, not found, rate limited, server,
-// transport or any other API error).
+// transport or any other API error), or a KindOutbox error from the outbox.
 package santati

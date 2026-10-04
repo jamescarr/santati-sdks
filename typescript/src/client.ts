@@ -3,6 +3,8 @@ import {
   AuditEventsApi,
   Configuration,
   EventBatchResultFromJSON,
+  EventEnvelopeRequestFromJSON,
+  EventEnvelopeRequestToJSON,
   FetchError,
   PaginatedAuditEventListFromJSON,
   ResponseError,
@@ -26,6 +28,7 @@ import {
   ValidationError,
 } from "./errors.js";
 import type { SantatiErrorOptions } from "./errors.js";
+import { MemoryOutbox, OutboxWorker } from "./outbox.js";
 import { withRetries, type RetryOptions } from "./retry.js";
 import type {
   ActorInput,
@@ -35,6 +38,9 @@ import type {
   EventPage,
   IterateParams,
   ListParams,
+  OutboxStore,
+  PostSendHook,
+  PreSendHook,
   TargetInput,
 } from "./types.js";
 import { VERSION } from "./version.js";
@@ -44,6 +50,8 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_RETRIES = 2;
 const DEFAULT_INITIAL_BACKOFF_MS = 250;
 const DEFAULT_MAX_BACKOFF_MS = 8000;
+const DEFAULT_BATCH_SIZE = 100;
+const DEFAULT_FLUSH_INTERVAL_MS = 1000;
 
 export interface SantatiOptions {
   /** Team API key (`sat_sk_…`); required and non-empty. */
@@ -60,6 +68,16 @@ export interface SantatiOptions {
   maxBackoffMs?: number;
   /** Extra headers on every request; may not carry `authorization`. */
   headers?: Record<string, string>;
+  /** Where `log` keeps events until sent; default `new MemoryOutbox()`. */
+  outbox?: OutboxStore;
+  /** Envelopes per outbox request, `1..500`; default 100. */
+  batchSize?: number;
+  /** The background worker's tick, `> 0`; default 1000. */
+  flushIntervalMs?: number;
+  /** Runs per event before its request; return the event, or null to drop it. */
+  preSend?: PreSendHook;
+  /** Runs per event after its attempt, with the outcome; exceptions are ignored. */
+  postSend?: PostSendHook;
 }
 
 interface ClientConfig extends RetryOptions {
@@ -68,6 +86,11 @@ interface ClientConfig extends RetryOptions {
   trail?: string;
   timeoutMs: number;
   headers: Record<string, string>;
+  outbox: OutboxStore;
+  batchSize: number;
+  flushIntervalMs: number;
+  preSend?: PreSendHook;
+  postSend?: PostSendHook;
 }
 
 /** A successful response, or the failed one an `ApiResponse` was never built from. */
@@ -89,6 +112,16 @@ function resolve(options: SantatiOptions): ClientConfig {
       });
     }
   }
+  const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
+  if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 500) {
+    throw new ValidationError("batchSize must be between 1 and 500", { field: "batch_size" });
+  }
+  const flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
+  if (!(flushIntervalMs > 0)) {
+    throw new ValidationError("flushIntervalMs must be greater than 0", {
+      field: "flush_interval_ms",
+    });
+  }
   return {
     apiKey: options.apiKey,
     baseUrl: (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, ""),
@@ -98,6 +131,11 @@ function resolve(options: SantatiOptions): ClientConfig {
     initialBackoffMs: options.initialBackoffMs ?? DEFAULT_INITIAL_BACKOFF_MS,
     maxBackoffMs: options.maxBackoffMs ?? DEFAULT_MAX_BACKOFF_MS,
     headers,
+    outbox: options.outbox ?? new MemoryOutbox(),
+    batchSize,
+    flushIntervalMs,
+    preSend: options.preSend,
+    postSend: options.postSend,
   };
 }
 
@@ -148,6 +186,32 @@ function buildEnvelope(
   if (input.createdAt != null) envelope.createdAt = input.createdAt;
   envelope.idempotencyKey = idempotencyKey;
   return envelope;
+}
+
+/**
+ * A stored event (`trail` and `idempotencyKey` filled in) as its wire envelope
+ * (snake_case), the form custom `OutboxStore`s should persist.
+ */
+export function envelopeToWire(input: EventInput): Record<string, unknown> {
+  return EventEnvelopeRequestToJSON(
+    buildEnvelope(undefined, input, "", input.idempotencyKey as string),
+  ) as unknown as Record<string, unknown>;
+}
+
+/** The inverse of `envelopeToWire`. */
+export function envelopeFromWire(json: unknown): EventInput {
+  const envelope = EventEnvelopeRequestFromJSON(json);
+  const input: EventInput = { event: envelope.event };
+  if (envelope.trail != null) input.trail = envelope.trail;
+  if (envelope.organizationId != null) input.organizationId = envelope.organizationId;
+  if (envelope.actor != null) input.actor = envelope.actor as ActorInput;
+  if (envelope.targets != null) input.targets = envelope.targets as TargetInput[];
+  if (envelope.metadata != null) input.metadata = envelope.metadata;
+  if (envelope.data != null) input.data = envelope.data;
+  if (envelope.context != null) input.context = envelope.context;
+  if (envelope.createdAt != null) input.createdAt = envelope.createdAt as unknown as string;
+  if (envelope.idempotencyKey != null) input.idempotencyKey = envelope.idempotencyKey;
+  return input;
 }
 
 /** Only the supplied filters, in the generated request's own camelCase. */
@@ -286,6 +350,13 @@ export class Events {
 
   /** Indexes up to 500 events; a `207` is a per-item result, not an error. */
   async emitBatch(events: EventInput[]): Promise<BatchResult> {
+    return (await this.emitBatchWithStatus(events)).result;
+  }
+
+  /** `emitBatch` plus the response's HTTP status (202 or 207). Used by the outbox worker. @internal */
+  async emitBatchWithStatus(
+    events: EventInput[],
+  ): Promise<{ result: BatchResult; status: number }> {
     if (events.length === 0) {
       throw new ValidationError("events must not be empty", { field: "events" });
     }
@@ -302,14 +373,17 @@ export class Events {
     if (raw.status !== 202 && raw.status !== 207) throw unexpected(raw);
     const result: EventBatchResult = decodeJson(raw, EventBatchResultFromJSON);
     return {
-      accepted: result.accepted,
-      rejected: result.rejected,
-      results: result.results.map((item) => ({
-        index: item.index,
-        status: item.status,
-        id: item.id,
-        error: item.error && { code: item.error.code, message: item.error.message, field: item.error.field },
-      })),
+      status: raw.status,
+      result: {
+        accepted: result.accepted,
+        rejected: result.rejected,
+        results: result.results.map((item) => ({
+          index: item.index,
+          status: item.status,
+          id: item.id,
+          error: item.error && { code: item.error.code, message: item.error.message, field: item.error.field },
+        })),
+      },
     };
   }
 
@@ -375,8 +449,42 @@ export class Events {
 export class Santati {
   /** Emit, batch, list and iterate on `/api/v0/events/`. */
   readonly events: Events;
+  private readonly config: ClientConfig;
+  private readonly outbox: OutboxWorker;
 
   constructor(options: SantatiOptions) {
-    this.events = new Events(resolve(options));
+    this.config = resolve(options);
+    this.events = new Events(this.config);
+    this.outbox = new OutboxWorker(
+      this.events,
+      this.config.outbox,
+      this.config.batchSize,
+      this.config.flushIntervalMs,
+      this.config.preSend,
+      this.config.postSend,
+    );
+  }
+
+  /**
+   * Fire-and-forget emit: validates like `events.emit`, stores the resolved
+   * event in the outbox and returns its idempotency key. Never makes a
+   * request; a background worker sends it. Rejects with `OutboxError` when the
+   * store refuses or the client is closed.
+   */
+  async log(input: EventInput): Promise<string> {
+    const key = input.idempotencyKey ?? crypto.randomUUID();
+    const envelope = buildEnvelope(this.config.trail, input, "", key);
+    // A snapshot, so later changes to the caller's objects do not reach the stored event.
+    return this.outbox.log(structuredClone({ ...input, trail: envelope.trail, idempotencyKey: key }));
+  }
+
+  /** Runs one outbox pass now. Rejects with `OutboxError` if the store fails. */
+  flush(): Promise<void> {
+    return this.outbox.flush();
+  }
+
+  /** Stops the worker, then flushes once. Idempotent; `log` afterwards rejects with `closed`. */
+  close(): Promise<void> {
+    return this.outbox.close();
   }
 }

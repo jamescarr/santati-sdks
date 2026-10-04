@@ -43,16 +43,53 @@ with santati.Santati("sat_sk_...", trail="billing") as client:
 
 `Santati(api_key, *, base_url="https://api.santati.io", trail=None,
 timeout_ms=10000, max_retries=2, initial_backoff_ms=250, max_backoff_ms=8000,
-headers=None)`. `trail` is the default trail for emits and is never applied to
-reads.
+headers=None, outbox=None, batch_size=100, flush_interval_ms=1000,
+pre_send=None, post_send=None)`. `trail` is the default trail for emits and is
+never applied to reads; the last five configure `log` (below).
+
+## Outbox and `log`
+
+`client.log(...)` takes the same arguments as `events.emit`, validates the
+same way, stores the envelope in an outbox and returns its idempotency key
+without making a request. A background thread sends the outbox every
+`flush_interval_ms` in batches of `batch_size` through `emit_batch`;
+`client.flush()` sends it now and `client.close()` (or leaving the `with`
+block) stops the thread and flushes once.
+
+```python
+import redis
+import santati
+from santati.outbox.redis import RedisOutbox
+
+
+def report(event: santati.EventInput, outcome: santati.SendOutcome) -> None:
+    if outcome.status in ("rejected", "failed"):
+        print(event["idempotency_key"], outcome.error)
+
+
+with santati.Santati("sat_sk_...", trail="billing", post_send=report) as client:
+    key = client.log("invoice.voided", organization_id="org_acme")
+
+# Survive restarts: keep the outbox in Redis (pip install "santati[redis]").
+client = santati.Santati("sat_sk_...", trail="billing", outbox=RedisOutbox(redis.Redis()))
+```
+
+The default store is `santati.MemoryOutbox(max_pending=10000)`; a full one
+makes `log` raise `OutboxError` (`code="outbox_full"`). `pre_send(event)` may
+return a modified event or `None` to drop it; `post_send(event, outcome)`
+receives each original event with a `SendOutcome` (`accepted`, `duplicate`,
+`rejected` or `failed`). A batch that fails with `TransportError`,
+`ServerError` or `RateLimitedError` stays in the outbox for the next pass; any
+other failure drops it. Implement `santati.OutboxStore` (`enqueue`, `claim`,
+`ack`, `release`) for another backend.
 
 ## Errors
 
 Every failure raises a subclass of `santati.SantatiError`: `ValidationError`,
 `AuthError`, `NotFoundError`, `RateLimitedError`, `ServerError`,
-`TransportError` or `ApiError`. Each carries `status`, `code`, `field`,
-`retry_after` and `message`; `status` is `None` for local validation failures
-and transport errors.
+`TransportError`, `ApiError` or `OutboxError`. Each carries `status`, `code`,
+`field`, `retry_after` and `message`; `status` is `None` for local validation
+failures, transport errors and outbox errors.
 
 `AuditEvent`, `EventActor` and `EventTarget` are the generated read models,
 re-exported from the package root. See `docs/sdk-surface.md` in the repository

@@ -31,6 +31,7 @@ defmodule Santati.MixProject do
       {:tesla, "~> 1.14"},
       {:mint, "~> 1.6"},
       {:castore, "~> 1.0"},
+      {:redix, "~> 1.5", optional: true},
       {:bandit, "~> 1.6", only: :test},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false}
     ]

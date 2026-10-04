@@ -38,6 +38,10 @@ module Santati
   # No HTTP response at all: refused, DNS, TLS or timeout.
   class TransportError < Error; end
 
+  # The outbox store refused or failed (`outbox_full`, `store_unavailable`,
+  # `closed`), or a `pre_send` hook raised (`hook_failed`). `status` is `nil`.
+  class OutboxError < Error; end
+
   # Any other non-2xx, an unexpected 2xx, or an undecodable 2xx body.
   class ApiError < Error; end
 

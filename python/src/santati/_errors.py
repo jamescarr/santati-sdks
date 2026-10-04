@@ -1,8 +1,8 @@
 """Errors raised by the Santati SDK.
 
-Every failure is a :class:`SantatiError`; the seven subclasses are the kinds
+Every failure is a :class:`SantatiError`; the eight subclasses are the kinds
 described in ``docs/sdk-surface.md``. ``status`` is ``None`` for local
-validation failures and transport errors.
+validation failures, transport errors and outbox errors.
 """
 
 from __future__ import annotations
@@ -59,3 +59,10 @@ class TransportError(SantatiError):
 
 class ApiError(SantatiError):
     """Any other failure: an unexpected status or an undecodable success body."""
+
+
+class OutboxError(SantatiError):
+    """The outbox store refused or failed, or a ``pre_send`` hook raised (status ``None``).
+
+    ``code`` is ``outbox_full``, ``store_unavailable``, ``closed`` or ``hook_failed``.
+    """

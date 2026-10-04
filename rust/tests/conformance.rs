@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::pin::pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use libtest_mimic::{Arguments, Failed, Trial};
@@ -215,6 +215,23 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
         }
     }
 
+    if let Some(batch_size) = config.get("batch_size").and_then(Value::as_u64) {
+        builder = builder.batch_size(batch_size as usize);
+    }
+    if let Some(interval) = config.get("flush_interval_ms").and_then(Value::as_u64) {
+        builder = builder.flush_interval(Duration::from_millis(interval));
+    }
+    let outcomes: Arc<Mutex<Vec<Value>>> = Arc::new(Mutex::new(Vec::new()));
+    if case["operation"] == "log" {
+        if let Some(max_pending) = config.get("max_pending").and_then(Value::as_u64) {
+            match santati::MemoryOutbox::new(max_pending as usize) {
+                Ok(store) => builder = builder.outbox(store),
+                Err(error) => return compare_outcome(case, gateway, Err(&error)).await,
+            }
+        }
+        builder = register_hooks(builder, input.get("hooks"), outcomes.clone());
+    }
+
     let built = builder.build();
     let outcome: Result<Value, Error> = match &built {
         Err(error) => Err(error.clone()),
@@ -239,6 +256,16 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
                         .unwrap_or_default();
                     events.emit_batch(batch).await.map(batch_json)
                 }
+                "log" => {
+                    let (keys, failure) = run_log(client, input).await;
+                    match failure {
+                        Some(error) => Err(error),
+                        None => Ok(json!({
+                            "keys": keys,
+                            "outcomes": outcomes.lock().unwrap().clone(),
+                        })),
+                    }
+                }
                 "list" => events
                     .list(list_params(&input["params"]))
                     .await
@@ -262,6 +289,88 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
     };
 
     compare_outcome(case, gateway, outcome.as_ref()).await
+}
+
+/// Log every event, stopping at the first SDK error, then close the client.
+async fn run_log(client: &Santati, input: &Value) -> (Vec<String>, Option<Error>) {
+    let mut keys = Vec::new();
+    let mut failure = None;
+    for event in input
+        .get("events")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default()
+    {
+        match client.log(event_input(event)).await {
+            Ok(key) => keys.push(key),
+            Err(error) => {
+                failure = Some(error);
+                break;
+            }
+        }
+    }
+    let closed = client.close().await;
+    if failure.is_none() {
+        failure = closed.err();
+    }
+    (keys, failure)
+}
+
+/// The runner's hooks per `conformance/README.md`; `post_send` is always
+/// registered and records one outcome per call.
+fn register_hooks(
+    mut builder: santati::Builder,
+    hooks: Option<&Value>,
+    outcomes: Arc<Mutex<Vec<Value>>>,
+) -> santati::Builder {
+    if let Some(pre) = hooks.and_then(|hooks| hooks.get("pre_send")) {
+        let raise = pre.get("raise").and_then(Value::as_bool) == Some(true);
+        let drop_events: Vec<String> = pre
+            .get("drop_events")
+            .and_then(Value::as_array)
+            .map(|names| {
+                names
+                    .iter()
+                    .filter_map(|name| name.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let set_metadata = pre.get("set_metadata").and_then(Value::as_object).cloned();
+        builder = builder.pre_send(move |mut event| {
+            if raise {
+                panic!("conformance pre_send");
+            }
+            if drop_events.contains(&event.event) {
+                return None;
+            }
+            if let Some(extra) = &set_metadata {
+                let metadata = event.metadata.get_or_insert_with(HashMap::new);
+                for (key, value) in extra {
+                    metadata.insert(key.clone(), value.as_str().unwrap_or_default().to_string());
+                }
+            }
+            Some(event)
+        });
+    }
+    let raise = hooks
+        .and_then(|hooks| hooks.get("post_send"))
+        .and_then(|post| post.get("raise"))
+        .and_then(Value::as_bool)
+        == Some(true);
+    builder.post_send(move |event, outcome| {
+        let mut record = json!({
+            "event": serde_json::to_value(event).unwrap_or(Value::Null),
+            "status": outcome.status.as_str(),
+            "id": outcome.id.clone(),
+        });
+        if let Some(error) = &outcome.error {
+            record["error"] = error_json(error);
+        }
+        outcomes.lock().unwrap().push(record);
+        if raise {
+            panic!("conformance post_send");
+        }
+    })
 }
 
 /// The stream's items, and the error a later page raised.

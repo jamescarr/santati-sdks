@@ -1,11 +1,11 @@
-//! The SDK's error type: one enum with seven kinds, each carrying the same
+//! The SDK's error type: one enum with eight kinds, each carrying the same
 //! details.
 
 use std::fmt;
 
 use reqwest::header::HeaderMap;
 
-/// Which of the seven failure kinds an [`Error`] is.
+/// Which of the eight failure kinds an [`Error`] is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
     /// Local validation, or an HTTP 400, 413 or 422.
@@ -22,6 +22,8 @@ pub enum ErrorKind {
     Transport,
     /// Any other non-2xx, an unexpected 2xx, or an undecodable 2xx body.
     Api,
+    /// The outbox store refused or failed, or a `pre_send` hook raised.
+    Outbox,
 }
 
 impl ErrorKind {
@@ -35,6 +37,7 @@ impl ErrorKind {
             ErrorKind::Server => "ServerError",
             ErrorKind::Transport => "TransportError",
             ErrorKind::Api => "ApiError",
+            ErrorKind::Outbox => "OutboxError",
         }
     }
 }
@@ -77,6 +80,8 @@ pub enum Error {
     Transport(ErrorDetails),
     /// Any other non-2xx, an unexpected 2xx, or an undecodable 2xx body.
     Api(ErrorDetails),
+    /// The outbox store refused or failed, or a `pre_send` hook raised.
+    Outbox(ErrorDetails),
 }
 
 impl Error {
@@ -89,11 +94,12 @@ impl Error {
             | Error::RateLimited(details)
             | Error::Server(details)
             | Error::Transport(details)
-            | Error::Api(details) => details,
+            | Error::Api(details)
+            | Error::Outbox(details) => details,
         }
     }
 
-    /// Which of the seven kinds this error is.
+    /// Which of the eight kinds this error is.
     pub fn kind(&self) -> ErrorKind {
         match self {
             Error::Validation(_) => ErrorKind::Validation,
@@ -103,6 +109,7 @@ impl Error {
             Error::Server(_) => ErrorKind::Server,
             Error::Transport(_) => ErrorKind::Transport,
             Error::Api(_) => ErrorKind::Api,
+            Error::Outbox(_) => ErrorKind::Outbox,
         }
     }
 
@@ -140,6 +147,7 @@ impl Error {
             ErrorKind::Server => Error::Server(details),
             ErrorKind::Transport => Error::Transport(details),
             ErrorKind::Api => Error::Api(details),
+            ErrorKind::Outbox => Error::Outbox(details),
         }
     }
 
@@ -147,6 +155,15 @@ impl Error {
     pub(crate) fn validation(field: impl Into<String>, message: impl Into<String>) -> Error {
         Error::Validation(ErrorDetails {
             field: Some(field.into()),
+            message: message.into(),
+            ..Default::default()
+        })
+    }
+
+    /// An outbox failure: the store refused or failed, or a hook raised.
+    pub(crate) fn outbox(code: &str, message: impl Into<String>) -> Error {
+        Error::Outbox(ErrorDetails {
+            code: Some(code.to_string()),
             message: message.into(),
             ..Default::default()
         })

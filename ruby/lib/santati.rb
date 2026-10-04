@@ -8,6 +8,7 @@ require_relative "santati/results"
 require_relative "santati/retry"
 require_relative "santati/client"
 require_relative "santati/events"
+require_relative "santati/outbox"
 
 # Official Ruby SDK for the Santati audit-log API.
 #

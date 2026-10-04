@@ -48,6 +48,17 @@ impl<'a> Events<'a> {
     /// One idempotency key is generated per event that does not have one, and a
     /// `207` (some items rejected) is a [`BatchResult`], not an error.
     pub async fn emit_batch(&self, events: Vec<EventInput>) -> Result<BatchResult, Error> {
+        self.emit_batch_with_status(events)
+            .await
+            .map(|(batch, _status)| batch)
+    }
+
+    /// [`Events::emit_batch`] that also returns the response's HTTP status
+    /// (202 or 207).
+    pub(crate) async fn emit_batch_with_status(
+        &self,
+        events: Vec<EventInput>,
+    ) -> Result<(BatchResult, u16), Error> {
         if events.is_empty() {
             return Err(Error::validation("events", "events must not be empty"));
         }
@@ -125,13 +136,16 @@ impl<'a> Events<'a> {
         }
     }
 
-    async fn attempt_batch(&self, body: &models::EventIngestRequest) -> Result<BatchResult, Error> {
+    async fn attempt_batch(
+        &self,
+        body: &models::EventIngestRequest,
+    ) -> Result<(BatchResult, u16), Error> {
         let response = send(self.post().json(body)).await?;
         match response.status {
             202 | 207 => {
                 let batch: models::EventBatchResult = serde_json::from_slice(&response.body)
                     .map_err(|_| Error::api(response.status))?;
-                Ok(convert_batch(batch))
+                Ok((convert_batch(batch), response.status))
             }
             status if (200..300).contains(&status) => Err(Error::api(status)),
             status => Err(Error::from_http(status, &response.headers, &response.body)),
@@ -163,7 +177,7 @@ impl<'a> Events<'a> {
     }
 
     /// Validate one envelope locally and shape it for the wire.
-    fn envelope(
+    pub(crate) fn envelope(
         &self,
         input: &EventInput,
         prefix: &str,

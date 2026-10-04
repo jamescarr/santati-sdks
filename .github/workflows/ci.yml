@@ -61,8 +61,15 @@ jobs:
       fail-fast: false
       matrix:
         package: ${{ fromJSON(needs.discover.outputs.packages) }}
+    # The Redis outbox adapters' integration tests run against this service;
+    # without SANTATI_TEST_REDIS_URL they skip.
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
     env:
       MISE_TASK_RUN_AUTO_INSTALL: "false"
+      SANTATI_TEST_REDIS_URL: redis://127.0.0.1:6379
     steps:
       - uses: actions/checkout@v7
       # The matrix value reaches the source through the environment, never

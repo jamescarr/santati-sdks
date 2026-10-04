@@ -43,8 +43,9 @@ case "$kind" in
     ;;
   cargo)
     cargo fmt --check
-    cargo clippy --locked --all-targets -- -D warnings
-    cargo test --locked
+    # --all-features compiles and tests the optional `redis` outbox adapter.
+    cargo clippy --locked --all-targets --all-features -- -D warnings
+    cargo test --locked --all-features
     cargo package --locked --allow-dirty
     ;;
   hex)

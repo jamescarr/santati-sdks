@@ -8,6 +8,15 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via the `redis` feature), background batching, `pre_send`/`post_send` hooks, `flush()`/`close()`.
+
+### Changed
+
+- The minimum supported Rust version is now 1.88 (from 1.85), the MSRV of the
+  `redis` crate behind the new `redis` feature.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added

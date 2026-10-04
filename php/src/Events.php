@@ -87,6 +87,22 @@ final class Events
      */
     public function emitBatch(array $events): BatchResult
     {
+        return $this->emitBatchWithStatus($events)[1];
+    }
+
+    /**
+     * {@see self::emitBatch()} that also returns the HTTP status of the response (202 or 207).
+     *
+     * @internal
+     *
+     * @param list<array<string, mixed>> $events
+     *
+     * @return array{0: int, 1: BatchResult}
+     *
+     * @throws ValidationException|AuthException|NotFoundException|RateLimitedException|ServerException|TransportException|ApiException
+     */
+    public function emitBatchWithStatus(array $events): array
+    {
         if ($events === []) {
             throw new ValidationException('events must not be empty', null, null, 'events');
         }
@@ -103,7 +119,7 @@ final class Events
 
         $request = (new EventBatchRequest())->setEvents($models);
 
-        return $this->client->retry->run(function () use ($request): BatchResult {
+        return $this->client->retry->run(function () use ($request): array {
             [$data, $status] = $this->send(fn () => $this->client->api->eventsCreateWithHttpInfo($request));
 
             if ($status !== 202 && $status !== 207) {
@@ -127,11 +143,11 @@ final class Events
                 );
             }
 
-            return new BatchResult(
+            return [$status, new BatchResult(
                 accepted: (int) $data->getAccepted(),
                 rejected: (int) $data->getRejected(),
                 results: $results,
-            );
+            )];
         });
     }
 
@@ -313,6 +329,72 @@ final class Events
     private static function fieldOf(string $message): ?string
     {
         return preg_match('/\$([A-Za-z_][A-Za-z0-9_]*)/', $message, $matches) === 1 ? $matches[1] : null;
+    }
+
+    /**
+     * Validates a `log` input exactly like `emit` and returns it as the stored
+     * event: the input with the resolved `trail` and `idempotency_key`.
+     *
+     * @internal
+     *
+     * @param array<string, mixed> $event
+     *
+     * @return array<string, mixed>
+     *
+     * @throws ValidationException
+     */
+    public function prepare(array $event): array
+    {
+        $envelope = $this->envelope($event, $this->client->trail, '');
+        $stored = [
+            'event' => $envelope['event'],
+            'trail' => $envelope['trail'],
+            'idempotency_key' => $envelope['idempotency_key'],
+        ];
+
+        foreach (['created_at', 'organization_id'] as $field) {
+            if (isset($envelope[$field])) {
+                $stored[$field] = $envelope[$field];
+            }
+        }
+
+        if (isset($envelope['actor'])) {
+            $stored['actor'] = self::members($event['actor'], ['type', 'id', 'name', 'metadata']);
+        }
+
+        if (isset($envelope['targets'])) {
+            $stored['targets'] = array_map(
+                static fn (array $target): array => self::members($target, ['type', 'id', 'name', 'metadata']),
+                array_values($event['targets'])
+            );
+        }
+
+        foreach (['metadata', 'context', 'data'] as $field) {
+            if (isset($envelope[$field])) {
+                $stored[$field] = $event[$field];
+            }
+        }
+
+        return $stored;
+    }
+
+    /**
+     * @param array<string, mixed> $input
+     * @param list<string>         $names
+     *
+     * @return array<string, mixed>
+     */
+    private static function members(array $input, array $names): array
+    {
+        $out = [];
+
+        foreach ($names as $name) {
+            if (($input[$name] ?? null) !== null) {
+                $out[$name] = $input[$name];
+            }
+        }
+
+        return $out;
     }
 
     /**

@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Santati.log/2`: fire-and-forget emit through a supervised `Santati.Outbox` process (in-memory by default, Redis adapter via `Santati.Outbox.Redis` and the optional `redix` dependency), background batching, `pre_send`/`post_send` hooks, `Santati.flush/1` and `Santati.Outbox.stop/1` (flushes on terminate). A batch whose send raises (e.g. on a malformed `pre_send` result, or an event JSON cannot encode) is reported to `post_send` as `Santati.OutboxError` `hook_failed` and dropped instead of crashing the process; an event `emit/2` raises on raises in the caller of `log/2`, not in the process.
+
+### Fixed
+
+- `Santati.Events.emit/2` and `emit_batch/2` raise `Protocol.UndefinedError` for an event JSON cannot represent (e.g. a tuple in `data`) instead of answering a `Santati.TransportError` after retrying the same body.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added

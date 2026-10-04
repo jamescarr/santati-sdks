@@ -1,5 +1,5 @@
 {
-  "operations": ["emit", "emit_batch", "list", "iterate"],
+  "operations": ["emit", "emit_batch", "list", "iterate", "log"],
   "error_kinds": [
     "ValidationError",
     "AuthError",
@@ -7,7 +7,8 @@
     "RateLimitedError",
     "ServerError",
     "TransportError",
-    "ApiError"
+    "ApiError",
+    "OutboxError"
   ],
   "features": [
     {"id": "client.auth", "description": "Authenticates every request with the team API key in `Authorization: Api-Key <key>`, plus any extra client headers; constructing a client with an empty `api_key` or an `authorization` header raises ValidationError before any request."},
@@ -24,6 +25,12 @@
     {"id": "list.page", "description": "200 answers EventPage with the results and the next cursor decoded from the `next` URL's `cursor` parameter, null when `next` is absent or has none."},
     {"id": "list.iterate", "description": "Follows next cursors page by page, yielding events lazily; an error on a later page is raised after the earlier events were yielded."},
     {"id": "errors.mapping", "description": "Maps every non-2xx response (and undecodable success bodies) onto the seven error kinds with `status`, `code`, `field` and `retry_after`."},
-    {"id": "retry.policy", "description": "Retries transport failures, 500/502/503/504 and 429 (unless the code is `quota_exceeded`) up to `max_retries` times with the same body and keys, honouring `Retry-After` unless it exceeds `max_backoff_ms`."}
+    {"id": "retry.policy", "description": "Retries transport failures, 500/502/503/504 and 429 (unless the code is `quota_exceeded`) up to `max_retries` times with the same body and keys, honouring `Retry-After` unless it exceeds `max_backoff_ms`."},
+    {"id": "log.enqueue", "description": "`log` validates like `emit`, stores the resolved envelope in the outbox and returns its idempotency key without making a request; a full memory outbox raises OutboxError `outbox_full`; `close` flushes what is pending."},
+    {"id": "log.validation", "description": "Rejects an empty `event` and an unresolved trail with ValidationError before anything is stored."},
+    {"id": "log.batching", "description": "A pass sends the outbox in FIFO batches of at most `batch_size` envelopes per request, keys unchanged."},
+    {"id": "log.hooks", "description": "`pre_send` sees each stored event before its request and may modify or drop it; a raising `pre_send` leaves the event in the outbox and reports a `failed` outcome with OutboxError `hook_failed`; `post_send` receives the original event and its outcome and its exceptions are ignored."},
+    {"id": "log.outcomes", "description": "A 202/207 answers one `post_send` outcome per sent event: accepted/duplicate with the id, rejected with a ValidationError carrying the item's code and field and the response status."},
+    {"id": "log.delivery", "description": "A batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."}
   ]
 }

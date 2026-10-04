@@ -5,6 +5,7 @@
     with santati.Santati("sat_sk_...", trail="billing") as client:
         result = client.events.emit("invoice.voided", organization_id="org_acme")
         print(result.event.id, result.duplicate)
+        client.log("invoice.paid", organization_id="org_acme")  # sent in the background
 
 See ``docs/sdk-surface.md`` in the repository for the surface every Santati SDK
 implements.
@@ -22,12 +23,14 @@ from ._errors import (
     ApiError,
     AuthError,
     NotFoundError,
+    OutboxError,
     RateLimitedError,
     SantatiError,
     ServerError,
     TransportError,
     ValidationError,
 )
+from ._outbox import MemoryOutbox, OutboxEntry, OutboxStore, PostSendHook, PreSendHook, SendOutcome
 from ._types import (
     ActorInput,
     BatchItem,
@@ -54,10 +57,17 @@ __all__ = [
     "EventPage",
     "EventTarget",
     "Events",
+    "MemoryOutbox",
     "NotFoundError",
+    "OutboxEntry",
+    "OutboxError",
+    "OutboxStore",
+    "PostSendHook",
+    "PreSendHook",
     "RateLimitedError",
     "Santati",
     "SantatiError",
+    "SendOutcome",
     "ServerError",
     "TargetInput",
     "TransportError",

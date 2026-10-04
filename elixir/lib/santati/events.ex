@@ -4,6 +4,9 @@ defmodule Santati.Events do
 
   All functions take a `Santati.Client`. Reads never apply the client's default
   trail; an emit resolves the trail from the event first, then from the client.
+
+  An event JSON cannot represent (a tuple, a pid or a reference anywhere in
+  it) raises `Protocol.UndefinedError`; it is never a `Santati.TransportError`.
   """
 
   alias Santati.{BatchItem, BatchItemError, BatchResult, Client, EmitResult, Errors, EventPage}
@@ -82,6 +85,15 @@ defmodule Santati.Events do
   @spec emit_batch(Client.t(), [map() | keyword()]) ::
           {:ok, BatchResult.t()} | {:error, Exception.t()}
   def emit_batch(%Client{} = client, events) when is_list(events) do
+    with {:ok, result, _status} <- emit_batch_with_status(client, events), do: {:ok, result}
+  end
+
+  @doc false
+  # `emit_batch/2` plus the HTTP status (202 or 207) of the batch response, which
+  # `Santati.Outbox` reports on rejected items.
+  @spec emit_batch_with_status(Client.t(), [map() | keyword()]) ::
+          {:ok, BatchResult.t(), 202 | 207} | {:error, Exception.t()}
+  def emit_batch_with_status(%Client{} = client, events) when is_list(events) do
     if events == [] do
       {:error, Errors.validation("events", "events must not be empty")}
     else
@@ -90,7 +102,7 @@ defmodule Santati.Events do
           {:ok, %{status: status, body: body}} when status in [202, 207] ->
             case decode(body, EventBatchResult) do
               {:ok, %EventBatchResult{} = result} ->
-                {:ok, batch_result(result)}
+                {:ok, batch_result(result), status}
 
               _other ->
                 {:error, Errors.api(status)}
@@ -178,6 +190,13 @@ defmodule Santati.Events do
 
   defp cursor_param(params, nil), do: params
   defp cursor_param(params, cursor), do: Keyword.put(params, :cursor, cursor)
+
+  @doc false
+  # The validated, resolved wire envelope of one event (string keys, no nils)
+  # and its idempotency key: the stored event of `Santati.Outbox`.
+  @spec build_envelope(Client.t(), map() | keyword()) ::
+          {:ok, map(), String.t()} | {:error, Exception.t()}
+  def build_envelope(%Client{} = client, event), do: envelope(client, event, "")
 
   defp envelope(client, event, prefix) do
     event = event_map(event)

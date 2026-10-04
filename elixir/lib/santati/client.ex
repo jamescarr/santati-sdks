@@ -83,6 +83,11 @@ defmodule Santati.Client do
         {:ok, %Tesla.Env{status: status, headers: headers, body: body}} ->
           {:ok, %{status: status, headers: headers, body: body}}
 
+        # The body holds a term JSON cannot represent (a tuple, a pid, …): a
+        # caller error raised like JSON.encode!/1, never a retryable transport failure.
+        {:error, {Tesla.Middleware.JSON, :encode, error}} when is_exception(error) ->
+          raise error
+
         {:error, reason} ->
           {:error, Errors.transport(reason)}
       end

@@ -47,6 +47,51 @@ for await (const read of santati.events.iterate({ trail: "billing" })) {
 }
 ```
 
+## Outbox and `log`
+
+`log` is a fire-and-forget `emit`: it validates locally, stores the event in an
+outbox and returns its idempotency key without making a request. A background
+worker (every `flushIntervalMs`) sends the outbox in batches of `batchSize`
+through `events.emitBatch`; `close()` stops it and flushes what is left.
+
+```ts
+const santati = new Santati({
+  apiKey: process.env.SANTATI_API_KEY!,
+  trail: "billing",
+  postSend: (event, outcome) => console.log(event.event, outcome.status),
+});
+
+const key = await santati.log({ event: "invoice.voided", organizationId: "org_acme" });
+await santati.close(); // sends anything still pending
+```
+
+The default store is a bounded in-memory `MemoryOutbox` (10000 events, lost on
+exit). For a durable outbox shared across processes, install the optional
+`ioredis` peer dependency and pass a `RedisOutbox` (a Redis stream with the
+consumer group `santati`):
+
+```sh
+npm install ioredis
+```
+
+```ts
+import { Redis } from "ioredis";
+import { RedisOutbox } from "@santati/node/redis";
+
+const santati = new Santati({
+  apiKey: process.env.SANTATI_API_KEY!,
+  trail: "billing",
+  outbox: new RedisOutbox(new Redis(process.env.REDIS_URL!)),
+});
+```
+
+`preSend(event)` may return a modified event, or `null` to drop it;
+`postSend(event, outcome)` sees every attempt's `accepted`, `duplicate`,
+`rejected` or `failed` outcome. Store failures raise `OutboxError`
+(`outbox_full`, `store_unavailable`, `closed`); a `preSend` that throws, or
+whose result makes the send throw a non-SDK error, is a `failed` outcome with
+`OutboxError` `hook_failed`.
+
 ## Options
 
 | option             | default                  | meaning                                        |
@@ -59,6 +104,11 @@ for await (const read of santati.events.iterate({ trail: "billing" })) {
 | `initialBackoffMs` | `250`                    | backoff base                                   |
 | `maxBackoffMs`     | `8000`                   | backoff cap, and the largest `Retry-After`     |
 | `headers`          | none                     | extra headers on every request                 |
+| `outbox`           | `MemoryOutbox`           | the store `log` writes to                      |
+| `batchSize`        | `100`                    | envelopes per outbox request, `1..500`         |
+| `flushIntervalMs`  | `1000`                   | the worker's tick, `> 0`                       |
+| `preSend`          | none                     | per-event hook before the request              |
+| `postSend`         | none                     | per-event hook with the outcome                |
 
 A `401`/`403`/`404`/`429`/`5xx`/transport failure and any `400`/`413`/`422` are
 raised as `AuthError`, `NotFoundError`, `RateLimitedError`, `ServerError`,

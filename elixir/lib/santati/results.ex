@@ -73,3 +73,29 @@ defmodule Santati.EventPage do
           next_cursor: String.t() | nil
         }
 end
+
+defmodule Santati.OutboxEntry do
+  @moduledoc "One claimed outbox entry: the store's `id` and the stored `event` map."
+
+  defstruct [:id, :event]
+
+  @type t :: %__MODULE__{id: String.t(), event: map()}
+end
+
+defmodule Santati.SendOutcome do
+  @moduledoc """
+  What happened to one event in a pass, handed to `post_send`.
+
+    * `status` — `:accepted`, `:duplicate`, `:rejected` or `:failed`
+    * `id` — the stored event's id for `:accepted` and `:duplicate`
+    * `error` — the exception for `:rejected` and `:failed`
+  """
+
+  defstruct [:status, :id, :error]
+
+  @type t :: %__MODULE__{
+          status: :accepted | :duplicate | :rejected | :failed,
+          id: String.t() | nil,
+          error: Exception.t() | nil
+        }
+end

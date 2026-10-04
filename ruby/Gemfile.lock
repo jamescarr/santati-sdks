@@ -10,6 +10,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.3)
+    connection_pool (3.0.2)
     faraday (2.14.4)
       faraday-net_http (>= 2.0, < 3.5)
       json
@@ -35,6 +36,10 @@ GEM
     racc (1.8.1)
     rainbow (3.1.1)
     rake (13.4.2)
+    redis (5.4.1)
+      redis-client (>= 0.22.0)
+    redis-client (0.30.1)
+      connection_pool
     regexp_parser (2.13.1)
     rubocop (1.88.2)
       json (~> 2.3)
@@ -81,12 +86,14 @@ PLATFORMS
 DEPENDENCIES
   minitest (~> 5.0)
   rake (~> 13.0)
+  redis (~> 5.0)
   santati!
   standard (~> 1.0)
   webrick (~> 1.8)
 
 CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
+  connection_pool (3.0.2) sha256=33fff5ba71a12d2aa26cb72b1db8bba2a1a01823559fb01d29eb74c286e62e0a
   faraday (2.14.4) sha256=9bb4408c44621b0dbaaaa39e5dbfc4dbe58cc6751b6eb94d16ae9e1f2f2fab6e
   faraday-multipart (1.2.0) sha256=7d89a949693714176f612323ca13746a2ded204031a6ba528adee788694ef757
   faraday-net_http (3.4.4) sha256=0e78af151747ed1b00f33e25973b4bc220d7f16c00c39676817c8b12331eb588
@@ -104,6 +111,8 @@ CHECKSUMS
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
   rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
+  redis (5.4.1) sha256=b5e675b57ad22b15c9bcc765d5ac26f60b675408af916d31527af9bd5a81faae
+  redis-client (0.30.1) sha256=5151bc5c7bbfe48623732cdae3b900d8a22dc691cc7cdfacfb351ac55116522d
   regexp_parser (2.13.1) sha256=5aedb6b7c35688f51e86eef17a15374dfd287c83f4ca644b2c5f3ec50a33b44b
   rubocop (1.88.2) sha256=8def251c90cd955feb4daa3edc0ab56893250c4ce90ef81e6c80c03f9a939bbf
   rubocop-ast (1.50.0) sha256=b9ca88300da0803ee222ad20cdb30494c0a784eed06fdc35d254b06d662788db
