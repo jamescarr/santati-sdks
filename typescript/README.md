@@ -89,7 +89,7 @@ const santati = new Santati({
 `postSend(event, outcome)` sees every attempt's `accepted`, `duplicate`,
 `rejected` or `failed` outcome. Store failures raise `OutboxError`
 (`outbox_full`, `store_unavailable`, `closed`); a `preSend` that throws, or
-returns something that cannot be sent, is a `failed` outcome with
+whose result makes the send throw a non-SDK error, is a `failed` outcome with
 `OutboxError` `hook_failed`.
 
 ## Options
