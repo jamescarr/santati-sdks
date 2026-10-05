@@ -109,7 +109,7 @@ client = Santati::Client.new(
 
 result = client.events.emit(event: "invoice.voided", organization_id: "org_acme")
 result.queued # => true
-client.close # drains the outbox; a queued `emit` raises Santati::OutboxError afterwards
+client.close # sends what is left (one pass); a queued `emit` raises Santati::OutboxError afterwards
 ```
 
 `client.flush` runs one send pass now. `Santati::MemoryOutbox.new` keeps up to

@@ -79,7 +79,7 @@ Without an outbox, `Events.Emit` sends the event and returns the stored one.
 With `WithOutbox`, `Emit` is fire-and-forget: it validates the event, stores it
 in the outbox and returns at once with `Queued` set and a nil `Event`, without
 making a request. A background worker sends the outbox in batches; `Close`
-stops it and drains what is left.
+stops it and sends what is left (one pass; during an outage the rest stays in the store).
 
 ```go
 store, _ := santati.NewMemoryOutbox(10000)

@@ -105,7 +105,8 @@ Without an outbox, `emit` sends the event. With `Builder::outbox`, `emit` is
 fire-and-forget: it validates like a plain `emit`, stores the envelope in the
 outbox and returns at once with `queued` set and no event, without making a
 request. A background task sends the outbox in batches; `close` stops it and
-drains what is left, so call it before exiting.
+sends what is left (one pass; during an outage the rest stays in the store), so call it
+before exiting.
 
 ```rust
 use santati::{EventInput, MemoryOutbox, Santati};

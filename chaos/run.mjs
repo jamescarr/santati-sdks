@@ -136,7 +136,10 @@ async function runScenario(sdkName, sdk, cwd, scenarioName) {
   let config = deepMerge(plan.defaults, scenario.config);
   if (sdk.profile === "php") config = deepMerge(config, plan.php_overrides);
   config.client.base_url = gateway.url;
-  const budgets = { ...plan.budgets, ...scenario.budgets };
+  // A profile entry (e.g. php) can relax a budget where an SDK's documented behaviour
+  // differs, and says why; the note is printed and kept in the results.
+  const profile = scenario.profiles?.[sdk.profile];
+  const budgets = { ...plan.budgets, ...scenario.budgets, ...profile?.budgets };
 
   const violations = [];
   let result = null;
@@ -155,7 +158,7 @@ async function runScenario(sdkName, sdk, cwd, scenarioName) {
     await gateway.close();
   }
   if (result !== null) violations.push(...judge(result, stats, budgets));
-  return { sdk: sdkName, scenario: scenarioName, result, stats, violations };
+  return { sdk: sdkName, scenario: scenarioName, result, stats, violations, note: profile?.note };
 }
 
 // ---- main -------------------------------------------------------------------
@@ -199,6 +202,7 @@ for (const sdkName of sdkNames) {
         violations.length === 0 ? "PASS" : `FAIL ${violations.join("; ")}`,
       ].join("\t"),
     );
+    if (row.note) console.log(`    note: ${row.note}`);
   }
 }
 

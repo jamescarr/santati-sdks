@@ -61,7 +61,13 @@
     },
     "recovery": {
       "gateway": {"mode": "recovery", "down_ms": 3000},
-      "budgets": {"deliver_all": true}
+      "budgets": {"deliver_all": true},
+      "profiles": {
+        "php": {
+          "budgets": {"deliver_all": false},
+          "note": "PHP has no worker: close() is its only pass and sends each batch once, so inside the 3 s outage it leaves the backlog in the MemoryOutbox, which dies with the process. Expected; a RedisOutbox keeps it (docs/sdk-surface.md, flush() and close())."
+        }
+      }
     }
   }
 }
