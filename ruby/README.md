@@ -79,7 +79,7 @@ Santati::Client.new(
   initial_backoff_ms: 250,
   max_backoff_ms: 8000,
   headers: {},                          # extra headers on every request
-  outbox: nil,                          # store for `log`; default Santati::MemoryOutbox.new(max_pending: 10_000)
+  outbox: nil,                          # when set, events.emit queues here instead of sending
   batch_size: 100,                      # envelopes per outbox request, 1..500
   flush_interval_ms: 1000,              # the worker's tick, > 0
   pre_send: nil,                        # ->(event) { event or nil to drop }
@@ -91,25 +91,31 @@ Every request carries `Authorization: Api-Key <api_key>` and
 `User-Agent: santati-ruby/<version>`; redirects are never followed, so the key
 is never replayed to another host.
 
-## Outbox and `log`
+## Outbox
 
-`log` validates like `events.emit`, stores the event in an outbox and returns
-its idempotency key without making a request; a background thread sends the
-outbox in batches. `close` stops the thread and flushes what is pending.
+Without an `outbox:`, `events.emit` sends the event and returns the stored one.
+With one, `emit` validates like a plain `emit`, stores the event in the outbox
+and returns at once with `queued` true and a nil `event`, without making a
+request; a background thread sends the outbox in batches. `close` stops the
+thread and flushes what is pending.
 
 ```ruby
 client = Santati::Client.new(
   api_key: ENV.fetch("SANTATI_API_KEY"),
   trail: "billing",
+  outbox: Santati::MemoryOutbox.new,
   post_send: ->(event, outcome) { warn "#{event[:event]}: #{outcome.status}" }
 )
 
-key = client.log(event: "invoice.voided", organization_id: "org_acme")
-client.close # drains the outbox; `log` raises Santati::OutboxError afterwards
+result = client.events.emit(event: "invoice.voided", organization_id: "org_acme")
+result.queued # => true
+client.close # sends what is left (one pass); a queued `emit` raises Santati::OutboxError afterwards
 ```
 
-`client.flush` runs one send pass now. The default store keeps up to 10,000
-events in memory. To survive restarts, or to share one outbox between
+`client.flush` runs one send pass now. `Santati::MemoryOutbox.new` keeps up to
+10,000 events in memory. `close` sends each batch once; if the endpoint is down, what it
+could not send stays in the store and, in memory, is lost with the process. To survive
+restarts, or to share one outbox between
 processes, use the Redis adapter (Redis Streams); add `gem "redis", ">= 5"` to
 your Gemfile, then:
 

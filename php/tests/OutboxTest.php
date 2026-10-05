@@ -11,7 +11,7 @@ use Santati\Outbox\MemoryOutbox;
 use Santati\SendOutcome;
 
 /**
- * The outbox behind `Client::log()`, without a server.
+ * The outbox behind a queued `Events::emit()`, without a server.
  */
 final class OutboxTest extends TestCase
 {
@@ -31,7 +31,7 @@ final class OutboxTest extends TestCase
             },
         );
 
-        $client->log(['event' => 'a.b', 'trail' => 't']);
+        $client->events->emit(['event' => 'a.b', 'trail' => 't']);
         $client->flush();
 
         self::assertCount(1, $outcomes);

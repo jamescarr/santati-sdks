@@ -1,4 +1,4 @@
-"""The outbox behind ``Santati.log``, without a server."""
+"""The outbox behind a queued ``events.emit``, without a server."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def test_unexpected_send_failure_is_reported_and_dropped() -> None:
     # Not an event: emit_batch fails on it with an AttributeError, not a SantatiError.
     client = _client(store, pre_send=lambda _e: "oops", post_send=lambda _e, o: outcomes.append(o))
 
-    client.log("a.b", trail="t")
+    client.events.emit("a.b", trail="t")
     client.flush()
 
     assert len(outcomes) == 1
@@ -28,12 +28,12 @@ def test_unexpected_send_failure_is_reported_and_dropped() -> None:
     client.close()
 
 
-def test_log_snapshots_the_event() -> None:
+def test_queued_emit_snapshots_the_event() -> None:
     store = santati.MemoryOutbox()
     client = _client(store)
     meta = {"a": "1"}
 
-    client.log("a.b", trail="t", metadata=meta)
+    client.events.emit("a.b", trail="t", metadata=meta)
     meta["a"] = "2"
 
     assert store.claim(1)[0].event["metadata"] == {"a": "1"}

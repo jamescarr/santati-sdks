@@ -52,11 +52,16 @@ export interface ListParams {
 /** `iterate` takes the same filters minus `cursor`: pages are followed for you. */
 export type IterateParams = Omit<ListParams, "cursor">;
 
-/** The stored event plus whether the server replayed an earlier request. */
+/**
+ * The stored event (`null` when queued), whether the server replayed an
+ * earlier request, the key that was used, and whether the event went to the
+ * outbox instead of the API.
+ */
 export interface EmitResult {
-  event: AuditEvent;
+  event: AuditEvent | null;
   duplicate: boolean;
   idempotencyKey: string;
+  queued: boolean;
 }
 
 export interface BatchItemError {
@@ -92,7 +97,7 @@ export interface OutboxEntry {
 }
 
 /**
- * Where `log` keeps events until the worker sends them. Methods may be
+ * Where a queued `emit` keeps events until the worker sends them. Methods may be
  * synchronous or return a promise. Stored events carry `trail` and
  * `idempotencyKey`; use `envelopeToWire` / `envelopeFromWire` to serialize them.
  */

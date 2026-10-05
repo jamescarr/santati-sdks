@@ -91,7 +91,8 @@
           "duplicate": false,
           "idempotency_key": {
             "$generated": "k"
-          }
+          },
+          "queued": false
         },
         "requests": [
           {
@@ -262,7 +263,8 @@
           "duplicate": false,
           "idempotency_key": {
             "$generated": "k"
-          }
+          },
+          "queued": false
         },
         "requests": [
           {

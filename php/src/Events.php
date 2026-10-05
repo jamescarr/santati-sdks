@@ -14,6 +14,7 @@ use Santati\Core\Model\EventTargetRequest;
 use Santati\Exception\ApiException;
 use Santati\Exception\AuthException;
 use Santati\Exception\NotFoundException;
+use Santati\Exception\OutboxException;
 use Santati\Exception\RateLimitedException;
 use Santati\Exception\SantatiException;
 use Santati\Exception\ServerException;
@@ -53,15 +54,23 @@ final class Events
     }
 
     /**
-     * Emits one audit event.
+     * Emits one audit event. With an `outbox` the event is stored for the next
+     * pass instead and the result is `queued`, with no event; no request is made.
      *
      * @param array<string, mixed> $event `event`, plus optional `trail`, `organization_id`, `actor`,
      *                                    `targets`, `metadata`, `data`, `context`, `created_at`, `idempotency_key`
      *
-     * @throws ValidationException|AuthException|NotFoundException|RateLimitedException|ServerException|TransportException|ApiException
+     * @throws ValidationException|AuthException|NotFoundException|RateLimitedException|ServerException|TransportException|ApiException|OutboxException
      */
     public function emit(array $event): EmitResult
     {
+        if ($this->client->outbox !== null) {
+            $stored = $this->prepare($event);
+            $this->client->outbox->enqueue($stored);
+
+            return new EmitResult(event: null, duplicate: false, idempotencyKey: (string) $stored['idempotency_key'], queued: true);
+        }
+
         $envelope = $this->envelope($event, $this->client->trail, '');
         $request = $this->envelopeModel($envelope);
         $key = $envelope['idempotency_key'];
@@ -92,6 +101,8 @@ final class Events
 
     /**
      * {@see self::emitBatch()} that also returns the HTTP status of the response (202 or 207).
+     * With `$retry` false the request is sent once, which is how the outbox sends: a
+     * retryable failure releases the batch for a later pass.
      *
      * @internal
      *
@@ -101,7 +112,7 @@ final class Events
      *
      * @throws ValidationException|AuthException|NotFoundException|RateLimitedException|ServerException|TransportException|ApiException
      */
-    public function emitBatchWithStatus(array $events): array
+    public function emitBatchWithStatus(array $events, bool $retry = true): array
     {
         if ($events === []) {
             throw new ValidationException('events must not be empty', null, null, 'events');
@@ -119,7 +130,7 @@ final class Events
 
         $request = (new EventBatchRequest())->setEvents($models);
 
-        return $this->client->retry->run(function () use ($request): array {
+        $send = function () use ($request): array {
             [$data, $status] = $this->send(fn () => $this->client->api->eventsCreateWithHttpInfo($request));
 
             if ($status !== 202 && $status !== 207) {
@@ -148,7 +159,9 @@ final class Events
                 rejected: (int) $data->getRejected(),
                 results: $results,
             )];
-        });
+        };
+
+        return $retry ? $this->client->retry->run($send) : $send();
     }
 
     /**
@@ -332,7 +345,7 @@ final class Events
     }
 
     /**
-     * Validates a `log` input exactly like `emit` and returns it as the stored
+     * Validates an `emit` input for the outbox and returns it as the stored
      * event: the input with the resolved `trail` and `idempotency_key`.
      *
      * @internal

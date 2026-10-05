@@ -1,6 +1,6 @@
-"""The outbox behind :meth:`santati.Santati.log`.
+"""The outbox behind a queued :meth:`santati.Events.emit`.
 
-``log`` stores the resolved envelope in an :class:`OutboxStore` and returns;
+A queued ``emit`` stores the resolved envelope in an :class:`OutboxStore` and returns;
 a worker thread drains the store in batches through ``emit_batch``. See
 ``docs/sdk-surface.md`` (Outbox, Worker, Hooks) for the contract.
 """
@@ -38,7 +38,7 @@ class OutboxEntry:
 
 @dataclass(frozen=True)
 class SendOutcome:
-    """What happened to one logged event: ``accepted``, ``duplicate``, ``rejected`` or ``failed``."""
+    """What happened to one queued event: ``accepted``, ``duplicate``, ``rejected`` or ``failed``."""
 
     status: str
     id: str | None = None
@@ -55,10 +55,10 @@ PostSendHook = Callable[[EventInput, SendOutcome], None]
 
 
 class OutboxStore(Protocol):
-    """Where :meth:`santati.Santati.log` puts events until the worker sends them.
+    """Where a queued :meth:`santati.Events.emit` puts events until the worker sends them.
 
     Implementations must be safe to call from the worker thread and from
-    ``log`` concurrently. Raise :class:`santati.OutboxError` (``outbox_full``)
+    a queued ``emit`` concurrently. Raise :class:`santati.OutboxError` (``outbox_full``)
     when full; any other exception becomes ``OutboxError(store_unavailable)``.
     """
 
@@ -80,7 +80,7 @@ class OutboxStore(Protocol):
 
 
 class MemoryOutbox:
-    """The default store: a bounded in-process FIFO queue.
+    """An in-process store: a bounded FIFO queue.
 
     ``enqueue`` raises :class:`santati.OutboxError` with code ``outbox_full``
     once ``max_pending`` events are pending or claimed.
@@ -141,30 +141,29 @@ class _Outbox:
         self._pre_send = pre_send
         self._post_send = post_send
         self._pass_lock = threading.Lock()
-        # Guards the lifecycle below; close() waits on it for in-flight logs.
+        # Guards the lifecycle below; close() waits on it for in-flight emits.
         self._state = threading.Condition()
-        self._logging = 0
+        self._enqueuing = 0
         self._wake = threading.Event()
         self._thread: threading.Thread | None = None
         self._closed = False
 
-    def log(self, event: EventInput) -> str:
+    def enqueue(self, event: EventInput) -> None:
         # A snapshot, so later changes to the caller's objects do not reach the stored event.
         event = copy.deepcopy(event)
         with self._state:
             if self._closed:
                 raise OutboxError("the client is closed", code="closed")
-            self._logging += 1
+            self._enqueuing += 1
         try:
             self._call(self._store.enqueue, event)
         finally:
             with self._state:
-                self._logging -= 1
+                self._enqueuing -= 1
                 self._state.notify_all()
                 if self._thread is None and not self._closed:
                     self._thread = threading.Thread(target=self._run, name="santati-outbox", daemon=True)
                     self._thread.start()
-        return event["idempotency_key"]
 
     def flush(self) -> None:
         with self._pass_lock:
@@ -175,9 +174,9 @@ class _Outbox:
             if self._closed:
                 return
             self._closed = True
-            # Every log() that got past the closed check is in the store
+            # Every emit() that got past the closed check is in the store
             # before the final flush.
-            self._state.wait_for(lambda: self._logging == 0)
+            self._state.wait_for(lambda: self._enqueuing == 0)
             thread = self._thread
         self._wake.set()
         if thread is not None:
@@ -228,7 +227,7 @@ class _Outbox:
         """Send one batch and settle its entries; ``True`` when they were released."""
         ids = [entry.id for entry, _ in to_send]
         try:
-            status, result = self._client.events._emit_batch([out for _, out in to_send])
+            status, result = self._client.events._emit_batch([out for _, out in to_send], retries=False)
         except SantatiError as err:
             for entry, _ in to_send:
                 self._notify(entry.event, SendOutcome("failed", error=err))

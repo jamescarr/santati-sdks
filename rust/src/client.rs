@@ -9,9 +9,7 @@ use reqwest::Client as HttpClient;
 
 use crate::error::Error;
 use crate::events::Events;
-use crate::outbox::{
-    self, MemoryOutbox, OutboxConfig, OutboxState, OutboxStore, SendOutcome, WorkerGuard,
-};
+use crate::outbox::{self, OutboxConfig, OutboxState, OutboxStore, SendOutcome, WorkerGuard};
 use crate::retry::RetryPolicy;
 use crate::types::EventInput;
 
@@ -41,7 +39,7 @@ pub struct Santati {
     max_retries: u32,
     initial_backoff: Duration,
     max_backoff: Duration,
-    outbox: Arc<OutboxState>,
+    outbox: Option<Arc<OutboxState>>,
     _guard: Option<Arc<WorkerGuard>>,
 }
 
@@ -56,32 +54,28 @@ impl Santati {
         Events::new(self)
     }
 
-    /// Fire-and-forget emit: validate like [`Events::emit`], store the resolved
-    /// envelope in the outbox and return its idempotency key. Never makes a
-    /// request; the background worker (started on the first call) sends it.
-    ///
-    /// Must be called inside a Tokio runtime. Returns [`Error::Outbox`] with
-    /// code `closed` after [`Santati::close`], `outbox_full` when a bounded
-    /// store is full, and `store_unavailable` for any other store failure.
-    pub async fn log(&self, event: EventInput) -> Result<String, Error> {
-        outbox::log(self, event).await
-    }
-
     /// Run one outbox pass now: claim, send and acknowledge batches until the
     /// outbox is empty or a batch is released for a later pass.
     ///
     /// Send failures never fail the call; they are reported through
     /// `post_send`. Returns [`Error::Outbox`] (`store_unavailable`) when the
-    /// store fails.
+    /// store fails. Without an outbox it returns `Ok(())` at once.
     pub async fn flush(&self) -> Result<(), Error> {
-        outbox::flush(self).await
+        match self.outbox_state() {
+            Some(state) => outbox::flush(self, state).await,
+            None => Ok(()),
+        }
     }
 
     /// Stop the worker, wait for a pass in progress, then [`Santati::flush`].
-    /// Idempotent: later calls return `Ok(())` at once. After `close`, `log`
-    /// fails with [`Error::Outbox`] code `closed`.
+    /// Idempotent: later calls return `Ok(())` at once. After `close`, a
+    /// queued [`Events::emit`] fails with [`Error::Outbox`] code `closed`.
+    /// Without an outbox, `flush` and `close` return `Ok(())` at once.
     pub async fn close(&self) -> Result<(), Error> {
-        outbox::close(self).await
+        match self.outbox_state() {
+            Some(state) => outbox::close(self, state).await,
+            None => Ok(()),
+        }
     }
 
     /// A copy for the worker task: it must not count as a user handle.
@@ -92,8 +86,8 @@ impl Santati {
         }
     }
 
-    pub(crate) fn outbox_state(&self) -> &Arc<OutboxState> {
-        &self.outbox
+    pub(crate) fn outbox_state(&self) -> Option<&Arc<OutboxState>> {
+        self.outbox.as_ref()
     }
 
     /// The origin every request goes to, trailing `/` removed.
@@ -208,8 +202,8 @@ impl Builder {
         self
     }
 
-    /// The [`OutboxStore`] [`Santati::log`] writes to; default is a
-    /// [`MemoryOutbox`] of 10 000 entries.
+    /// Makes [`Events::emit`] store events in `store` for the background worker
+    /// instead of sending them; there is no outbox by default.
     pub fn outbox(mut self, store: impl OutboxStore + 'static) -> Builder {
         self.outbox.store = Some(Arc::new(store));
         self
@@ -303,17 +297,15 @@ impl Builder {
                 Error::transport(format!("could not build the HTTP client: {error}"))
             })?;
 
-        let outbox = match self.outbox.store {
-            Some(store) => store,
-            None => Arc::new(MemoryOutbox::new(outbox::DEFAULT_MAX_PENDING)?),
-        };
-        let outbox = OutboxState::new(
-            outbox,
-            self.outbox.batch_size,
-            self.outbox.flush_interval,
-            self.outbox.pre_send,
-            self.outbox.post_send,
-        );
+        let outbox = self.outbox.store.map(|store| {
+            OutboxState::new(
+                store,
+                self.outbox.batch_size,
+                self.outbox.flush_interval,
+                self.outbox.pre_send,
+                self.outbox.post_send,
+            )
+        });
 
         Ok(Santati {
             http,
@@ -323,7 +315,7 @@ impl Builder {
             max_retries: self.max_retries,
             initial_backoff: self.initial_backoff,
             max_backoff: self.max_backoff,
-            _guard: Some(Arc::new(WorkerGuard(outbox.clone()))),
+            _guard: outbox.clone().map(|state| Arc::new(WorkerGuard(state))),
             outbox,
         })
     }

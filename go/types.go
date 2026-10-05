@@ -70,11 +70,14 @@ type ListParams struct {
 }
 
 // EmitResult is the outcome of a single emit. Duplicate is true when the
-// server replayed an earlier event for the same idempotency key.
+// server replayed an earlier event for the same idempotency key. Event is nil
+// and Queued true when the client has an outbox: the event was stored for the
+// background worker instead of sent.
 type EmitResult struct {
 	Event          *AuditEvent
 	Duplicate      bool
 	IdempotencyKey string
+	Queued         bool
 }
 
 // BatchItemError explains why one event in a batch was rejected.
@@ -151,7 +154,7 @@ type PreSendHook func(EventInput) (EventInput, bool)
 // event and its outcome. A panic is recovered and ignored.
 type PostSendHook func(EventInput, SendOutcome)
 
-// OutboxStore is where Log keeps events until the worker sends them. A store
+// OutboxStore is where a queued Emit keeps events until the worker sends them. A store
 // must be safe for concurrent use. Failures should be returned as *Error; any
 // other error is reported as OutboxError "store_unavailable".
 type OutboxStore interface {

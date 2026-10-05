@@ -62,9 +62,10 @@ module Santati
     end
   end
 
-  # The per-client outbox worker: `log` enqueues, a daemon thread (started by
-  # the first `log`) runs a pass every `flush_interval_ms`, `flush` runs one
-  # pass synchronously and `close` stops the thread and flushes.
+  # The per-client outbox worker: `enqueue` (from a queued `emit`) stores the
+  # event, a daemon thread (started by the first `enqueue`) runs a pass every
+  # `flush_interval_ms`, `flush` runs one pass synchronously and `close` stops
+  # the thread and flushes.
   #
   # @api private
   class Outbox
@@ -85,14 +86,14 @@ module Santati
       @closed = false
     end
 
-    def log(event)
+    def enqueue(event)
       raise OutboxError.new("the client is closed", code: "closed") if @closed
 
       # A snapshot, so later changes to the caller's objects do not reach the stored event.
       event = Marshal.load(Marshal.dump(event))
       guard { @store.enqueue(event) }
       start_worker
-      event.fetch(:idempotency_key)
+      nil
     end
 
     def flush
@@ -175,7 +176,7 @@ module Santati
     def send_batch(to_send)
       ids = to_send.map { |entry, _| entry.id }
       begin
-        status, result = @client.events.emit_batch_with_status(to_send.map { |_, out| out })
+        status, result = @client.events.emit_batch_with_status(to_send.map { |_, out| out }, retries: false)
       rescue Error => e
         to_send.each { |entry, _| notify(entry.event, SendOutcome.new(status: "failed", error: e)) }
         if RETRYABLE.any? { |kind| e.is_a?(kind) }

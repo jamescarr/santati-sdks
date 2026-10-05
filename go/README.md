@@ -73,27 +73,31 @@ func main() {
 }
 ```
 
-## Outbox and `Log`
+## Outbox
 
-`Log` is a fire-and-forget emit: it validates the event like `Events.Emit`,
-stores it in an outbox and returns the idempotency key without making a
-request. A background worker sends the outbox in batches; `Close` stops it and
-drains what is left.
+Without an outbox, `Events.Emit` sends the event and returns the stored one.
+With `WithOutbox`, `Emit` is fire-and-forget: it validates the event, stores it
+in the outbox and returns at once with `Queued` set and a nil `Event`, without
+making a request. A background worker sends the outbox in batches; `Close`
+stops it and sends what is left (one pass; during an outage the rest stays in the store).
 
 ```go
+store, _ := santati.NewMemoryOutbox(10000)
 client, _ := santati.NewClient(os.Getenv("SANTATI_API_KEY"),
 	santati.WithTrail("billing"),
+	santati.WithOutbox(store),
 	santati.WithPostSend(func(e santati.EventInput, o santati.SendOutcome) {
 		log.Println(e.IdempotencyKey, o.Status)
 	}),
 )
 defer client.Close(ctx)
 
-key, err := client.Log(ctx, santati.EventInput{Event: "invoice.paid"})
+res, err := client.Events.Emit(ctx, santati.EventInput{Event: "invoice.paid"}) // res.Queued == true
 ```
 
-The default store is an in-memory `MemoryOutbox` (10000 events). To survive
-restarts, use the Redis adapter; it takes your existing go-redis client and
+`santati.NewMemoryOutbox(10000)` gives an in-process outbox (lost on exit). `Close` sends
+each batch once; if the endpoint is down, what it could not send stays in the store and,
+in memory, is lost with the process. To survive restarts, use the Redis adapter; it takes your existing go-redis client and
 needs `go get github.com/redis/go-redis/v9`:
 
 ```go

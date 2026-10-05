@@ -21,13 +21,13 @@
 //	}
 //	_ = result
 //
-// Log is the fire-and-forget counterpart of Events.Emit: it validates the
-// event, stores it in an outbox (in memory by default; the redisoutbox
-// package offers a Redis-backed store) and returns its idempotency key. A
-// background worker sends the outbox in batches, PreSend and PostSend hooks
-// observe each event, and Flush or Close drain it synchronously:
+// With WithOutbox, Events.Emit is fire-and-forget: it validates the event,
+// stores it in the outbox (santati.NewMemoryOutbox for an in-process store; the
+// redisoutbox package offers a Redis-backed one) and returns at once with
+// Queued set. A background worker sends the outbox in batches, PreSend and
+// PostSend hooks observe each event, and Flush or Close drain it synchronously:
 //
-//	key, err := client.Log(ctx, santati.EventInput{Event: "invoice.paid"})
+//	res, err := client.Events.Emit(ctx, santati.EventInput{Event: "invoice.paid"}) // res.Queued == true
 //	...
 //	err = client.Close(ctx)
 //

@@ -35,7 +35,7 @@ from ._errors import (
     TransportError,
     ValidationError,
 )
-from ._outbox import MemoryOutbox, OutboxStore, PostSendHook, PreSendHook, _Outbox
+from ._outbox import OutboxStore, PostSendHook, PreSendHook, _Outbox
 from ._retry import RetryPolicy
 from ._types import (
     ActorInput,
@@ -62,8 +62,8 @@ class Santati:
 
     Construction is the only place the options are read; :attr:`trail`, the
     default trail for emits, stays live. Use it as a context manager, or call
-    :meth:`close` yourself, to send what :meth:`log` left in the outbox and
-    release the pooled connections.
+    :meth:`close` yourself, to send what a queued :meth:`Events.emit` left in the
+    outbox and release the pooled connections.
     """
 
     def __init__(
@@ -120,60 +120,36 @@ class Santati:
         self.events = Events(self)
         """The audit-event operations: ``emit``, ``emit_batch``, ``list``, ``iterate``."""
 
-        self._outbox = _Outbox(
-            self,
-            outbox if outbox is not None else MemoryOutbox(),
-            batch_size=batch_size,
-            flush_interval_ms=flush_interval_ms,
-            pre_send=pre_send,
-            post_send=post_send,
+        self._outbox: _Outbox | None = (
+            None
+            if outbox is None
+            else _Outbox(
+                self,
+                outbox,
+                batch_size=batch_size,
+                flush_interval_ms=flush_interval_ms,
+                pre_send=pre_send,
+                post_send=post_send,
+            )
         )
-
-    def log(
-        self,
-        event: str,
-        *,
-        trail: str | None = None,
-        organization_id: str | None = None,
-        actor: ActorInput | None = None,
-        targets: Sequence[TargetInput] | None = None,
-        metadata: Mapping[str, str] | None = None,
-        data: Any = None,
-        context: Mapping[str, Any] | None = None,
-        created_at: str | None = None,
-        idempotency_key: str | None = None,
-    ) -> str:
-        """Store one event in the outbox and return its idempotency key; never makes a request.
-
-        Validates like :meth:`Events.emit`. A background thread sends the
-        outbox every ``flush_interval_ms``; :meth:`flush` and :meth:`close`
-        send it now. Raises :class:`OutboxError` when the store refuses the
-        event or the client is closed.
-        """
-        envelope = _build_envelope(
-            event=event,
-            trail=trail,
-            organization_id=organization_id,
-            actor=actor,
-            targets=targets,
-            metadata=metadata,
-            data=data,
-            context=context,
-            created_at=created_at,
-            idempotency_key=idempotency_key,
-            default_trail=self.trail,
-            field_prefix="",
-        )
-        _envelope_model(envelope)  # emit's model validation, so the outbox never holds what emit rejects
-        return self._outbox.log(cast(EventInput, envelope))
 
     def flush(self) -> None:
-        """Send what the outbox holds now: one pass, in batches of ``batch_size``."""
-        self._outbox.flush()
+        """Send what the outbox holds now: one pass, in batches of ``batch_size``.
+
+        Returns at once when the client has no ``outbox``.
+        """
+        if self._outbox is not None:
+            self._outbox.flush()
 
     def close(self) -> None:
-        """Stop the outbox worker, flush the outbox once, and release the pooled connections."""
-        self._outbox.close()
+        """Stop the outbox worker (if any), flush the outbox once, and release the pooled connections.
+
+        A queued :meth:`Events.emit` after ``close`` raises :class:`OutboxError`
+        (``closed``); without an ``outbox`` only the connections are released
+        and ``emit`` keeps working.
+        """
+        if self._outbox is not None:
+            self._outbox.close()
         self._api_client.rest_client.pool_manager.clear()
 
     def __enter__(self) -> Self:
@@ -208,7 +184,13 @@ class Events:
         created_at: str | None = None,
         idempotency_key: str | None = None,
     ) -> EmitResult:
-        """Index one event; a repeated ``idempotency_key`` returns the stored one."""
+        """Index one event, or with an ``outbox`` store it for the background worker and return at once.
+
+        A repeated ``idempotency_key`` returns the stored event. A queued emit
+        never makes a request: the result has ``event=None`` and ``queued=True``.
+        Raises :class:`OutboxError` when the store refuses the event or the
+        client is closed.
+        """
         envelope = _build_envelope(
             event=event,
             trail=trail,
@@ -225,6 +207,10 @@ class Events:
         )
         body = _envelope_model(envelope)
         key = envelope["idempotency_key"]
+        outbox = self._client._outbox
+        if outbox is not None:
+            outbox.enqueue(cast(EventInput, envelope))
+            return EmitResult(event=None, duplicate=False, idempotency_key=key, queued=True)
 
         def attempt() -> EmitResult:
             status, headers, raw = _attempt(
@@ -247,8 +233,8 @@ class Events:
         """Index up to 500 events in one request, one generated key per item."""
         return self._emit_batch(events)[1]
 
-    def _emit_batch(self, events: Sequence[EventInput]) -> tuple[int, BatchResult]:
-        """:meth:`emit_batch`, plus the response status (202 or 207) the outbox reports."""
+    def _emit_batch(self, events: Sequence[EventInput], *, retries: bool = True) -> tuple[int, BatchResult]:
+        """:meth:`emit_batch`, plus the response status (202 or 207) the outbox reports; ``retries=False`` sends once."""
         if not events:
             raise ValidationError("events must not be empty", field="events")
         envelopes = [
@@ -289,7 +275,7 @@ class Events:
                 )
             raise _error_from_response(status, headers, raw)
 
-        return self._client._retry.run(attempt)
+        return self._client._retry.run(attempt) if retries else attempt()
 
     def list(
         self,

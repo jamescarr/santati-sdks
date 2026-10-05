@@ -1,4 +1,4 @@
-//! The outbox behind [`Santati::log`](crate::Santati::log): the store
+//! The outbox behind a queued [`Events::emit`](crate::Events::emit): the store
 //! interface, the bounded in-memory store, and the worker's pass.
 
 use std::any::Any;
@@ -21,8 +21,6 @@ use crate::types::{BatchStatus, EventInput};
 #[cfg(feature = "redis")]
 pub mod redis;
 
-/// The default capacity of the built-in [`MemoryOutbox`].
-pub(crate) const DEFAULT_MAX_PENDING: usize = 10_000;
 const DEFAULT_BATCH_SIZE: usize = 100;
 const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(1_000);
 
@@ -80,9 +78,9 @@ pub struct SendOutcome {
     pub error: Option<Error>,
 }
 
-/// Where [`Santati::log`] keeps events until the worker sends them.
+/// Where a queued [`Events::emit`](crate::Events::emit) keeps events until the worker sends them.
 ///
-/// A store must be safe to call from the worker and from `log` concurrently.
+/// A store must be safe to call from the worker and from a queued `emit` concurrently.
 #[async_trait]
 pub trait OutboxStore: Send + Sync {
     /// Store `event` at the tail; fail with [`Error::Outbox`] code
@@ -304,32 +302,26 @@ fn panic_text(payload: &(dyn Any + Send)) -> String {
     }
 }
 
-pub(crate) async fn log(client: &Santati, event: EventInput) -> Result<String, Error> {
-    let state = client.outbox_state();
+/// Store an already-resolved event for the worker; never makes a request.
+pub(crate) async fn enqueue(
+    client: &Santati,
+    state: &Arc<OutboxState>,
+    stored: EventInput,
+) -> Result<(), Error> {
     if state.closed.load(Ordering::SeqCst) {
         return Err(Error::outbox("closed", "client is closed"));
     }
-    let envelope = client.events().envelope(&event, "")?;
-    let key = envelope.idempotency_key.clone().unwrap_or_default();
-    let stored = EventInput {
-        trail: Some(envelope.trail),
-        idempotency_key: Some(key.clone()),
-        data: event.data.filter(|data| !data.is_null()),
-        ..event
-    };
     state.store.enqueue(stored).await.map_err(store_error)?;
-    start_worker(client);
-    Ok(key)
+    start_worker(client, state);
+    Ok(())
 }
 
-pub(crate) async fn flush(client: &Santati) -> Result<(), Error> {
-    let state = client.outbox_state();
+pub(crate) async fn flush(client: &Santati, state: &Arc<OutboxState>) -> Result<(), Error> {
     let _guard = state.pass_lock.lock().await;
-    pass(client).await
+    pass(client, state).await
 }
 
-pub(crate) async fn close(client: &Santati) -> Result<(), Error> {
-    let state = client.outbox_state();
+pub(crate) async fn close(client: &Santati, state: &Arc<OutboxState>) -> Result<(), Error> {
     if state.closed.swap(true, Ordering::SeqCst) {
         return Ok(());
     }
@@ -343,7 +335,7 @@ pub(crate) async fn close(client: &Santati) -> Result<(), Error> {
     if let Some(worker) = worker {
         let _ = worker.await;
     }
-    flush(client).await
+    flush(client, state).await
 }
 
 /// Stops the worker once every user-held client handle is gone; the worker's
@@ -358,13 +350,12 @@ impl Drop for WorkerGuard {
     }
 }
 
-/// Spawn the tick task on the first `log`; without a Tokio runtime there is
-/// no worker and `flush`/`close` still send.
-fn start_worker(client: &Santati) {
+/// Spawn the tick task on the first queued emit; without a Tokio runtime there
+/// is no worker and `flush`/`close` still send.
+fn start_worker(client: &Santati, state: &Arc<OutboxState>) {
     let Ok(runtime) = tokio::runtime::Handle::try_current() else {
         return;
     };
-    let state = client.outbox_state();
     let mut worker = state
         .worker
         .lock()
@@ -373,8 +364,8 @@ fn start_worker(client: &Santati) {
         return;
     }
     let client = client.without_guard();
+    let state = state.clone();
     *worker = Some(runtime.spawn(async move {
-        let state = client.outbox_state().clone();
         loop {
             tokio::select! {
                 _ = tokio::time::sleep(state.flush_interval) => {}
@@ -386,7 +377,7 @@ fn start_worker(client: &Santati) {
             // Store failures and stray panics must not kill the worker.
             let tick = async {
                 let _guard = state.pass_lock.lock().await;
-                let _ = pass(&client).await;
+                let _ = pass(&client, &state).await;
             };
             let _ = AssertUnwindSafe(tick).catch_unwind().await;
         }
@@ -411,8 +402,7 @@ fn is_retryable(error: &Error) -> bool {
 
 /// One pass: claim, hook, send and acknowledge until the outbox is drained or
 /// a batch was released.
-async fn pass(client: &Santati) -> Result<(), Error> {
-    let state = client.outbox_state();
+async fn pass(client: &Santati, state: &Arc<OutboxState>) -> Result<(), Error> {
     loop {
         let entries = state
             .store
@@ -449,7 +439,7 @@ async fn pass(client: &Santati) -> Result<(), Error> {
         }
         if !to_send.is_empty() {
             let ids: Vec<String> = to_send.iter().map(|entry| entry.id.clone()).collect();
-            match client.events().emit_batch_with_status(outs).await {
+            match client.events().emit_batch_with_status(outs, false).await {
                 Err(error) => {
                     for entry in &to_send {
                         state.failed(&entry.event, error.clone());

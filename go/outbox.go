@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// MemoryOutbox is the default OutboxStore: a bounded FIFO queue held in
+// MemoryOutbox is an in-process OutboxStore: a bounded FIFO queue held in
 // memory, safe for concurrent use. Events are lost when the process exits;
 // use the redisoutbox package for a durable store.
 type MemoryOutbox struct {
@@ -86,7 +86,7 @@ func (m *MemoryOutbox) Release(_ context.Context, ids []string) error {
 	return nil
 }
 
-// outbox is the per-client log state: the store, the hooks and the worker.
+// outbox is the per-client outbox state: the store, the hooks and the worker.
 type outbox struct {
 	client    *Client
 	store     OutboxStore
@@ -98,60 +98,64 @@ type outbox struct {
 	// pass serialises passes: the worker's ticks and Flush never overlap.
 	pass sync.Mutex
 
-	// life guards started/closed. Log holds it for reading across the
-	// enqueue so Close waits for in-flight logs before the final flush.
+	// life guards started/closed. enqueue holds it for reading across the
+	// store write so Close waits for in-flight emits before the final flush.
 	life    sync.RWMutex
 	started atomic.Bool
 	closed  bool
 	stop    chan struct{}
 	done    chan struct{}
+	cancel  context.CancelFunc // aborts the worker's send in progress; set by start
 }
 
-// Log validates the event exactly like Events.Emit, stores the resolved event
-// in the outbox and returns its idempotency key. It never makes a request; a
-// background worker sends the event later. The first call starts the worker.
+// enqueue stores the already-resolved event in the store. It never makes a
+// request; a background worker sends the event later, and the first call
+// starts the worker.
 //
 // Failures of the store are a *Error with kind KindOutbox: code "outbox_full"
 // for a full MemoryOutbox, "store_unavailable" for any other store failure and
 // "closed" after Close.
-func (c *Client) Log(ctx context.Context, input EventInput) (string, error) {
-	envelope, key, err := c.envelope(input, "event", "trail")
-	if err != nil {
-		return "", err
-	}
-	// A snapshot, so later changes to the caller's maps and slices do not reach the stored event.
-	stored := cloneEvent(input)
-	stored.Trail = envelope.Trail
-	stored.IdempotencyKey = key
-
-	o := c.outbox
+func (o *outbox) enqueue(ctx context.Context, stored EventInput) error {
 	o.life.RLock()
 	if o.closed {
 		o.life.RUnlock()
-		return "", outboxError("closed", "client is closed")
+		return outboxError("closed", "client is closed")
 	}
-	err = o.store.Enqueue(ctx, stored)
+	err := o.store.Enqueue(ctx, stored)
 	o.life.RUnlock()
 	if err != nil {
-		return "", storeError(err)
+		return storeError(err)
 	}
 	o.start()
-	return key, nil
+	return nil
 }
 
 // Flush runs one outbox pass synchronously: it sends everything pending in
 // batches of the configured size, stopping early after a retryable failure.
 // It returns an OutboxError "store_unavailable" if the store fails during the
 // pass; send failures never fail Flush, they are reported to the PostSendHook.
+// Without an outbox, Flush returns nil at once.
 func (c *Client) Flush(ctx context.Context) error {
+	if c.outbox == nil {
+		return nil
+	}
 	return c.outbox.flush(ctx)
 }
 
-// Close stops the outbox worker, waits for a pass in progress, then runs a
-// final Flush. It is idempotent: later calls return nil without another pass.
-// After Close, Log fails with OutboxError "closed".
+// Close stops the outbox worker, then runs a final Flush under ctx. It is
+// idempotent: later calls return nil without another pass. After Close, a
+// queued Emit fails with OutboxError "closed". Without an outbox, Close
+// returns nil and Emit keeps working.
+//
+// Close cancels a worker send in progress (its batch is released and re-sent
+// by the final flush) and runs the final flush under ctx; if ctx ends first,
+// Close returns ctx.Err() and what was not sent stays in the store. A Flush
+// running on another goroutine holds the pass lock, and Close waits for it.
 func (c *Client) Close(ctx context.Context) error {
 	o := c.outbox
+	if o == nil {
+		return nil
+	}
 	o.life.Lock()
 	if o.closed {
 		o.life.Unlock()
@@ -163,9 +167,14 @@ func (c *Client) Close(ctx context.Context) error {
 
 	if started {
 		close(o.stop)
+		o.cancel()
 		<-o.done
 	}
-	return o.flush(ctx)
+	err := o.flush(ctx)
+	if err == nil && ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	return err
 }
 
 func (o *outbox) start() {
@@ -180,10 +189,12 @@ func (o *outbox) start() {
 	o.started.Store(true)
 	o.stop = make(chan struct{})
 	o.done = make(chan struct{})
-	go o.run(o.stop, o.done)
+	ctx, cancel := context.WithCancel(context.Background())
+	o.cancel = cancel
+	go o.run(ctx, o.stop, o.done)
 }
 
-func (o *outbox) run(stop <-chan struct{}, done chan<- struct{}) {
+func (o *outbox) run(ctx context.Context, stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 	timer := time.NewTimer(o.interval)
 	defer timer.Stop()
@@ -192,17 +203,18 @@ func (o *outbox) run(stop <-chan struct{}, done chan<- struct{}) {
 		case <-stop:
 			return
 		case <-timer.C:
-			o.tick()
+			o.tick(ctx)
 			timer.Reset(o.interval)
 		}
 	}
 }
 
 // tick runs one worker pass. Store failures are swallowed (the next tick
-// retries) and a panic must not kill the worker.
-func (o *outbox) tick() {
+// retries) and a panic must not kill the worker. ctx is cancelled by Close, which
+// aborts a send in progress.
+func (o *outbox) tick(ctx context.Context) {
 	defer func() { _ = recover() }()
-	_ = o.flush(context.Background())
+	_ = o.flush(ctx)
 }
 
 func (o *outbox) flush(ctx context.Context) error {
@@ -266,7 +278,12 @@ func (o *outbox) runPass(ctx context.Context) error {
 
 // send emits one batch, reports the outcomes and acks or releases the
 // entries. retry is true when the batch was released for a later pass.
+//
+// The request runs under ctx, which Close cancels; the store calls that settle
+// the batch afterwards do not, so a store that honours its context still
+// releases or acks what the aborted request left claimed.
 func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, err error) {
+	settle := context.WithoutCancel(ctx)
 	ids := make([]string, len(toSend))
 	outs := make([]EventInput, len(toSend))
 	for i, item := range toSend {
@@ -274,7 +291,7 @@ func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, er
 		outs[i] = item.out
 	}
 
-	result, sendErr := o.client.Events.EmitBatch(ctx, outs)
+	result, sendErr := o.client.Events.emitBatch(ctx, outs, false)
 	if sendErr != nil {
 		var sdkErr *Error
 		if !errors.As(sendErr, &sdkErr) {
@@ -285,12 +302,12 @@ func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, er
 		}
 		switch sdkErr.Kind {
 		case KindTransport, KindServer, KindRateLimited:
-			if err := o.store.Release(ctx, ids); err != nil {
+			if err := o.store.Release(settle, ids); err != nil {
 				return false, storeError(err)
 			}
 			return true, nil
 		default:
-			if err := o.store.Ack(ctx, ids); err != nil {
+			if err := o.store.Ack(settle, ids); err != nil {
 				return false, storeError(err)
 			}
 			return false, nil
@@ -303,7 +320,7 @@ func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, er
 		}
 		o.callPostSend(toSend[item.Index].entry.Event, outcomeFor(item, result.status))
 	}
-	if err := o.store.Ack(ctx, ids); err != nil {
+	if err := o.store.Ack(settle, ids); err != nil {
 		return false, storeError(err)
 	}
 	return false, nil
@@ -323,7 +340,7 @@ func outcomeFor(item BatchItem, status int) SendOutcome {
 }
 
 // cloneEvent deep-copies the reference members of an event so neither the
-// caller of Log nor a hook that mutates its argument in place can change the
+// caller of a queued Emit nor a hook that mutates its argument in place can change the
 // stored original.
 func cloneEvent(e EventInput) EventInput {
 	if e.Actor != nil {

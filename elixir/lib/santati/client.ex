@@ -20,7 +20,8 @@ defmodule Santati.Client do
     :initial_backoff_ms,
     :max_backoff_ms,
     :headers,
-    :http
+    :http,
+    :outbox
   ]
 
   @type t :: %__MODULE__{
@@ -32,7 +33,8 @@ defmodule Santati.Client do
           initial_backoff_ms: non_neg_integer(),
           max_backoff_ms: non_neg_integer(),
           headers: Enumerable.t(),
-          http: Tesla.Client.t()
+          http: Tesla.Client.t(),
+          outbox: GenServer.server() | nil
         }
 
   @doc false
@@ -57,7 +59,8 @@ defmodule Santati.Client do
            Keyword.get(options, :initial_backoff_ms, @default_initial_backoff_ms),
          max_backoff_ms: Keyword.get(options, :max_backoff_ms, @default_max_backoff_ms),
          headers: headers,
-         http: build_http(api_key, base_url, timeout_ms, headers)
+         http: build_http(api_key, base_url, timeout_ms, headers),
+         outbox: Keyword.get(options, :outbox)
        }}
     end
   end

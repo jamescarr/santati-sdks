@@ -118,7 +118,7 @@ defmodule Santati.ConformanceTest do
     error -> {:error, error}
   end
 
-  defp invoke(client, input, "log") do
+  defp invoke(client, input, "emit_outbox") do
     test_pid = self()
     hooks = input["hooks"] || %{}
     input_client = input["client"]
@@ -142,11 +142,13 @@ defmodule Santati.ConformanceTest do
 
     case Santati.Outbox.start_link(options) do
       {:ok, outbox} ->
-        {keys, error} =
-          Enum.reduce_while(input["events"], {[], nil}, fn event, {keys, nil} ->
-            case Santati.Outbox.log(outbox, event) do
-              {:ok, key} -> {:cont, {[key | keys], nil}}
-              {:error, error} -> {:halt, {keys, error}}
+        client = %{client | outbox: outbox}
+
+        {results, error} =
+          Enum.reduce_while(input["events"], {[], nil}, fn event, {results, nil} ->
+            case Santati.Events.emit(client, event) do
+              {:ok, result} -> {:cont, {[to_wire(result) | results], nil}}
+              {:error, error} -> {:halt, {results, error}}
             end
           end)
 
@@ -156,7 +158,7 @@ defmodule Santati.ConformanceTest do
         if error do
           {:error, error}
         else
-          {:ok, %{"keys" => Enum.reverse(keys), "outcomes" => outcomes}}
+          {:ok, %{"results" => Enum.reverse(results), "outcomes" => outcomes}}
         end
 
       {:error, error} ->

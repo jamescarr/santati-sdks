@@ -7,14 +7,16 @@ namespace Santati;
 use Santati\Core\Model\AuditEvent;
 
 /**
- * The stored (or replayed) event of a single emit.
+ * The stored (or replayed) event of a single emit; `event` is null and
+ * `queued` true when the client's outbox stored it instead.
  */
 final readonly class EmitResult
 {
     public function __construct(
-        public AuditEvent $event,
+        public ?AuditEvent $event,
         public bool $duplicate,
         public string $idempotencyKey,
+        public bool $queued = false,
     ) {
     }
 }

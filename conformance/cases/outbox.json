@@ -1,9 +1,9 @@
 {
   "cases": [
     {
-      "id": "log.enqueue_and_close",
-      "feature": "log.enqueue",
-      "operation": "log",
+      "id": "outbox.enqueue_and_close",
+      "feature": "outbox.enqueue",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -46,10 +46,18 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1",
+          "results": [
             {
-              "$generated": "k2"
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": {
+                "$generated": "k2"
+              },
+              "queued": true
             }
           ],
           "outcomes": [
@@ -105,9 +113,9 @@
       }
     },
     {
-      "id": "log.validation_event",
-      "feature": "log.validation",
-      "operation": "log",
+      "id": "outbox.validation_event",
+      "feature": "outbox.validation",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -146,9 +154,9 @@
       }
     },
     {
-      "id": "log.validation_trail",
-      "feature": "log.validation",
-      "operation": "log",
+      "id": "outbox.validation_trail",
+      "feature": "outbox.validation",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -186,9 +194,9 @@
       }
     },
     {
-      "id": "log.batch_size",
-      "feature": "log.batching",
-      "operation": "log",
+      "id": "outbox.batch_size",
+      "feature": "outbox.batching",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -255,10 +263,22 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1",
-            "a-2",
-            "a-3"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-2",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-3",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -332,9 +352,9 @@
       }
     },
     {
-      "id": "log.pre_send_modifies",
-      "feature": "log.hooks",
-      "operation": "log",
+      "id": "outbox.pre_send_modifies",
+      "feature": "outbox.hooks",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -374,8 +394,12 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -413,9 +437,9 @@
       }
     },
     {
-      "id": "log.pre_send_drops",
-      "feature": "log.hooks",
-      "operation": "log",
+      "id": "outbox.pre_send_drops",
+      "feature": "outbox.hooks",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -459,9 +483,17 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1",
-            "a-2"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-2",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -496,9 +528,9 @@
       }
     },
     {
-      "id": "log.pre_send_drops_all",
-      "feature": "log.hooks",
-      "operation": "log",
+      "id": "outbox.pre_send_drops_all",
+      "feature": "outbox.hooks",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -538,8 +570,12 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
           ],
           "outcomes": []
         },
@@ -547,9 +583,9 @@
       }
     },
     {
-      "id": "log.pre_send_raises",
-      "feature": "log.hooks",
-      "operation": "log",
+      "id": "outbox.pre_send_raises",
+      "feature": "outbox.hooks",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -587,8 +623,12 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -609,9 +649,9 @@
       }
     },
     {
-      "id": "log.post_send_raises",
-      "feature": "log.hooks",
-      "operation": "log",
+      "id": "outbox.post_send_raises",
+      "feature": "outbox.hooks",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -649,8 +689,12 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -685,9 +729,9 @@
       }
     },
     {
-      "id": "log.rejected_item",
-      "feature": "log.outcomes",
-      "operation": "log",
+      "id": "outbox.rejected_item",
+      "feature": "outbox.outcomes",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -733,9 +777,17 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1",
-            "a-2"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-2",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -789,9 +841,9 @@
       }
     },
     {
-      "id": "log.retryable_released",
-      "feature": "log.delivery",
-      "operation": "log",
+      "id": "outbox.retryable_released",
+      "feature": "outbox.delivery",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -821,9 +873,17 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1",
-            "a-2"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-2",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -861,9 +921,9 @@
       }
     },
     {
-      "id": "log.non_retryable_dropped",
-      "feature": "log.delivery",
-      "operation": "log",
+      "id": "outbox.non_retryable_dropped",
+      "feature": "outbox.delivery",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -893,9 +953,17 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1",
-            "a-2"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-2",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -961,9 +1029,9 @@
       }
     },
     {
-      "id": "log.transport_released",
-      "feature": "log.delivery",
-      "operation": "log",
+      "id": "outbox.transport_released",
+      "feature": "outbox.delivery",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -983,8 +1051,12 @@
       },
       "expect": {
         "ok": {
-          "keys": [
-            "a-1"
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
           ],
           "outcomes": [
             {
@@ -1003,9 +1075,9 @@
       }
     },
     {
-      "id": "log.outbox_full",
-      "feature": "log.enqueue",
-      "operation": "log",
+      "id": "outbox.outbox_full",
+      "feature": "outbox.enqueue",
+      "operation": "emit_outbox",
       "input": {
         "client": {
           "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
@@ -1045,6 +1117,79 @@
         "error": {
           "kind": "OutboxError",
           "code": "outbox_full"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-1"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "outbox.single_attempt",
+      "feature": "outbox.delivery",
+      "operation": "emit_outbox",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 2,
+          "initial_backoff_ms": 0,
+          "max_backoff_ms": 0,
+          "flush_interval_ms": 60000,
+          "batch_size": 1
+        },
+        "gateway": {
+          "status": 503,
+          "body": {
+            "json": {
+              "detail": "down"
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
+          ],
+          "outcomes": [
+            {
+              "event": {
+                "event": "invoice.voided",
+                "trail": "billing",
+                "idempotency_key": "a-1"
+              },
+              "status": "failed",
+              "error": {
+                "kind": "ServerError",
+                "status": 503
+              }
+            }
+          ]
         },
         "requests": [
           {

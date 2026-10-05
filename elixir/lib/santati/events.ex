@@ -49,15 +49,32 @@ defmodule Santati.Events do
 
   Answers `{:ok, %Santati.EmitResult{}}` with `duplicate: true` when the server
   replayed an earlier request, `{:error, exception}` otherwise.
+
+  When the client was built with an `:outbox`, the event is stored through that
+  `Santati.Outbox` server instead, and the answer is `{:ok, result}` with
+  `result.queued == true` and `result.event == nil`; it never makes a request.
   """
   @spec emit(Client.t(), map() | keyword()) :: {:ok, EmitResult.t()} | {:error, Exception.t()}
+  def emit(%Client{outbox: outbox} = client, event) when not is_nil(outbox) do
+    with {:ok, envelope, key} <- envelope(client, event, ""),
+         :ok <- Santati.Outbox.enqueue(outbox, envelope) do
+      {:ok, %EmitResult{event: nil, duplicate: false, idempotency_key: key, queued: true}}
+    end
+  end
+
   def emit(%Client{} = client, event) do
     with {:ok, envelope, key} <- envelope(client, event, "") do
       case Client.request(client, :post, @events_path, body: envelope) do
         {:ok, %{status: status, body: body}} when status in [200, 201] ->
           case decode(body, AuditEvent) do
             {:ok, %AuditEvent{} = stored} ->
-              {:ok, %EmitResult{event: stored, duplicate: status == 200, idempotency_key: key}}
+              {:ok,
+               %EmitResult{
+                 event: stored,
+                 duplicate: status == 200,
+                 idempotency_key: key,
+                 queued: false
+               }}
 
             _other ->
               {:error, Errors.api(status)}
@@ -190,13 +207,6 @@ defmodule Santati.Events do
 
   defp cursor_param(params, nil), do: params
   defp cursor_param(params, cursor), do: Keyword.put(params, :cursor, cursor)
-
-  @doc false
-  # The validated, resolved wire envelope of one event (string keys, no nils)
-  # and its idempotency key: the stored event of `Santati.Outbox`.
-  @spec build_envelope(Client.t(), map() | keyword()) ::
-          {:ok, map(), String.t()} | {:error, Exception.t()}
-  def build_envelope(%Client{} = client, event), do: envelope(client, event, "")
 
   defp envelope(client, event, prefix) do
     event = event_map(event)

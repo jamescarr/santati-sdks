@@ -9,7 +9,8 @@ use reqwest::{RequestBuilder, Response};
 use crate::client::Santati;
 use crate::error::Error;
 use crate::models;
-use crate::retry::run as run_with_retries;
+use crate::outbox;
+use crate::retry::{run as run_with_retries, RetryPolicy};
 use crate::types::{
     ActorInput, BatchItem, BatchItemError, BatchResult, BatchStatus, EmitResult, EventInput,
     EventPage, ListParams, TargetInput,
@@ -35,9 +36,27 @@ impl<'a> Events<'a> {
     /// The envelope carries exactly the supplied members; `trail` falls back to
     /// the client's, and `idempotency_key` to a freshly generated UUIDv4. A
     /// `201` is a new event and a `200` a replay: see [`EmitResult::duplicate`].
+    ///
+    /// With [`Builder::outbox`](crate::Builder::outbox), the event is stored and
+    /// the call returns at once with `queued` set; it never makes a request.
     pub async fn emit(&self, event: EventInput) -> Result<EmitResult, Error> {
         let envelope = self.envelope(&event, "")?;
         let idempotency_key = envelope.idempotency_key.clone().unwrap_or_default();
+        if let Some(state) = self.client.outbox_state() {
+            let stored = EventInput {
+                trail: Some(envelope.trail),
+                idempotency_key: Some(idempotency_key.clone()),
+                data: event.data.filter(|data| !data.is_null()),
+                ..event
+            };
+            outbox::enqueue(self.client, state, stored).await?;
+            return Ok(EmitResult {
+                event: None,
+                duplicate: false,
+                idempotency_key,
+                queued: true,
+            });
+        }
         let body = models::EventIngestRequest::EventEnvelopeRequest(envelope);
         let policy = self.client.retry_policy();
         run_with_retries(policy, || self.attempt_emit(&body, &idempotency_key)).await
@@ -48,16 +67,19 @@ impl<'a> Events<'a> {
     /// One idempotency key is generated per event that does not have one, and a
     /// `207` (some items rejected) is a [`BatchResult`], not an error.
     pub async fn emit_batch(&self, events: Vec<EventInput>) -> Result<BatchResult, Error> {
-        self.emit_batch_with_status(events)
+        self.emit_batch_with_status(events, true)
             .await
             .map(|(batch, _status)| batch)
     }
 
     /// [`Events::emit_batch`] that also returns the response's HTTP status
-    /// (202 or 207).
+    /// (202 or 207). With `retries` false the request is sent once, which is
+    /// how the outbox sends: a retryable failure releases the batch for a
+    /// later pass.
     pub(crate) async fn emit_batch_with_status(
         &self,
         events: Vec<EventInput>,
+        retries: bool,
     ) -> Result<(BatchResult, u16), Error> {
         if events.is_empty() {
             return Err(Error::validation("events", "events must not be empty"));
@@ -69,7 +91,14 @@ impl<'a> Events<'a> {
         let body = models::EventIngestRequest::EventBatchRequest(models::EventBatchRequest {
             events: envelopes,
         });
-        let policy = self.client.retry_policy();
+        let policy = if retries {
+            self.client.retry_policy()
+        } else {
+            RetryPolicy {
+                max_retries: 0,
+                ..self.client.retry_policy()
+            }
+        };
         run_with_retries(policy, || self.attempt_batch(&body)).await
     }
 
@@ -126,9 +155,10 @@ impl<'a> Events<'a> {
                 let event: models::AuditEvent = serde_json::from_slice(&response.body)
                     .map_err(|_| Error::api(response.status))?;
                 Ok(EmitResult {
-                    event,
+                    event: Some(event),
                     duplicate: response.status == 200,
                     idempotency_key: idempotency_key.to_string(),
+                    queued: false,
                 })
             }
             status if (200..300).contains(&status) => Err(Error::api(status)),

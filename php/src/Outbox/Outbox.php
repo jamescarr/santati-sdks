@@ -14,7 +14,7 @@ use Santati\Exception\ValidationException;
 use Santati\SendOutcome;
 
 /**
- * The outbox behind `Client::log()`: stores events, and drains the store in
+ * The outbox behind a queued `Events::emit()`: stores events, and drains the store in
  * batches through `Events::emitBatch()` on `flush()`.
  *
  * PHP has no background worker; passes run on `flush()`, `close()` and, for
@@ -40,6 +40,7 @@ final class Outbox
         private readonly int $batchSize,
         private readonly mixed $preSend,
         private readonly mixed $postSend,
+        private readonly bool $finishRequest = false,
     ) {
     }
 
@@ -48,7 +49,7 @@ final class Outbox
      *
      * @throws OutboxException
      */
-    public function log(array $stored): string
+    public function enqueue(array $stored): void
     {
         if ($this->closed) {
             throw OutboxException::with('closed', 'client is closed');
@@ -69,6 +70,10 @@ final class Outbox
                     return;
                 }
 
+                if ($this->finishRequest && function_exists('fastcgi_finish_request')) {
+                    fastcgi_finish_request();
+                }
+
                 try {
                     $this->flush();
                 } catch (\Throwable) {
@@ -76,8 +81,6 @@ final class Outbox
                 }
             });
         }
-
-        return (string) $stored['idempotency_key'];
     }
 
     /**
@@ -155,7 +158,7 @@ final class Outbox
                 $ids = array_map(static fn (array $pair): string => $pair[0]->id, $toSend);
 
                 try {
-                    [$status, $result] = $this->events->emitBatchWithStatus(array_map(static fn (array $pair): array => $pair[1], $toSend));
+                    [$status, $result] = $this->events->emitBatchWithStatus(array_map(static fn (array $pair): array => $pair[1], $toSend), false);
                 } catch (SantatiException $e) {
                     foreach ($toSend as [$entry]) {
                         $this->notify($entry->event, new SendOutcome('failed', null, $e));

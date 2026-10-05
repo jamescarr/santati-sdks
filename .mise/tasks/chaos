@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Load and fault-injection run of every SDK's outbox against a chaos gateway (manual; not part of check)"
+#USAGE arg "[pkgs]" var=#true help="SDKs to run (default: all)"
+set -euo pipefail
+source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
+cd "$ROOT"
+
+eval "pkgs=(${usage_pkgs:-})"
+node chaos/run.mjs "${pkgs[@]+"${pkgs[@]}"}"

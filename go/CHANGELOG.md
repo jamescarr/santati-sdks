@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `Log()`: fire-and-forget emit through an outbox (in-memory by default, Redis adapter via `redisoutbox`), background batching, `WithPreSend`/`WithPostSend` hooks, `Flush()`/`Close()`. `Log()` stores a copy of the event's maps and slices.
+- An opt-in outbox: with `WithOutbox` (`NewMemoryOutbox`, or a Redis adapter via `redisoutbox`) `Events.Emit` stores the event and returns at once with `EmitResult.Queued` true; a background worker sends the outbox in batches of `WithBatchSize` every `WithFlushInterval` through `EmitBatch`, with `WithPreSend`/`WithPostSend` hooks, `Flush()`/`Close()`. A queued `Emit` stores a copy of the event's maps and slices. Each batch is sent once, without `WithMaxRetries`: a retryable failure releases it for the next pass. `Close(ctx)` cancels a worker send in progress (its batch is re-sent by the final flush) and runs the final flush under `ctx`, returning `ctx.Err()` if it ends first.
+
+### Changed
+
+- `EmitResult` has a new `Queued` field; its `Event` is nil for a queued emit.
 
 ## [0.1.0] - 2026-10-01
 

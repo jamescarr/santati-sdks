@@ -124,7 +124,7 @@ func runCase(t *testing.T, testCase testCase) {
 	}
 
 	outcomes := &outcomeLog{}
-	client, clientErr := buildClient(input.Client, origin, hookOptions(input.Hooks, outcomes)...)
+	client, clientErr := buildClient(input.Client, origin, testCase.Operation == "emit_outbox", hookOptions(input.Hooks, outcomes)...)
 	bindings := map[string]string{}
 
 	if clientErr != nil {
@@ -140,11 +140,7 @@ func runCase(t *testing.T, testCase testCase) {
 		var result *santati.EmitResult
 		result, err = client.Events.Emit(ctx, decodeEvent(input.Event))
 		if err == nil {
-			actual = map[string]any{
-				"event":           result.Event,
-				"duplicate":       result.Duplicate,
-				"idempotency_key": result.IdempotencyKey,
-			}
+			actual = emitValue(result)
 		}
 	case "emit_batch":
 		var result *santati.BatchResult
@@ -164,8 +160,8 @@ func runCase(t *testing.T, testCase testCase) {
 		if err == nil {
 			actual = events
 		}
-	case "log":
-		actual, err = runLog(ctx, client, decodeEvents(input.Events), outcomes)
+	case "emit_outbox":
+		actual, err = runEmitOutbox(ctx, client, decodeEvents(input.Events), outcomes)
 	default:
 		t.Fatalf("unknown operation %q", testCase.Operation)
 	}
@@ -452,7 +448,7 @@ func responseFrom(raw map[string]json.RawMessage) gatewayResponse {
 
 // ---- inputs --------------------------------------------------------------
 
-func buildClient(c clientJSON, origin string, extra ...santati.Option) (*santati.Client, error) {
+func buildClient(c clientJSON, origin string, outbox bool, extra ...santati.Option) (*santati.Client, error) {
 	options := []santati.Option{santati.WithBaseURL(origin + c.BasePath)}
 	options = append(options, extra...)
 	if c.BatchSize != nil {
@@ -461,8 +457,12 @@ func buildClient(c clientJSON, origin string, extra ...santati.Option) (*santati
 	if c.FlushIntervalMS != nil {
 		options = append(options, santati.WithFlushInterval(time.Duration(*c.FlushIntervalMS*float64(time.Millisecond))))
 	}
-	if c.MaxPending != nil {
-		store, err := santati.NewMemoryOutbox(*c.MaxPending)
+	if outbox {
+		maxPending := 10000
+		if c.MaxPending != nil {
+			maxPending = *c.MaxPending
+		}
+		store, err := santati.NewMemoryOutbox(maxPending)
 		if err != nil {
 			return nil, err
 		}
@@ -622,7 +622,7 @@ func collectIterate(ctx context.Context, client *santati.Client, params santati.
 	return events, nil
 }
 
-// ---- log -----------------------------------------------------------------
+// ---- emit_outbox ---------------------------------------------------------
 
 // outcomeLog collects what the runner's post_send hook sees. The hook runs on
 // the worker goroutine, so access is locked.
@@ -703,24 +703,33 @@ func nullIfEmpty(value string) any {
 	return value
 }
 
-func runLog(ctx context.Context, client *santati.Client, events []santati.EventInput, outcomes *outcomeLog) (any, error) {
-	keys := []any{}
-	var logErr error
+func runEmitOutbox(ctx context.Context, client *santati.Client, events []santati.EventInput, outcomes *outcomeLog) (any, error) {
+	results := []any{}
+	var emitErr error
 	for _, event := range events {
-		key, err := client.Log(ctx, event)
+		result, err := client.Events.Emit(ctx, event)
 		if err != nil {
-			logErr = err
+			emitErr = err
 			break
 		}
-		keys = append(keys, key)
+		results = append(results, emitValue(result))
 	}
-	if err := client.Close(ctx); err != nil && logErr == nil {
-		logErr = err
+	if err := client.Close(ctx); err != nil && emitErr == nil {
+		emitErr = err
 	}
-	if logErr != nil {
-		return nil, logErr
+	if emitErr != nil {
+		return nil, emitErr
 	}
-	return map[string]any{"keys": keys, "outcomes": outcomes.snapshot()}, nil
+	return map[string]any{"results": results, "outcomes": outcomes.snapshot()}, nil
+}
+
+func emitValue(result *santati.EmitResult) any {
+	return map[string]any{
+		"event":           result.Event,
+		"duplicate":       result.Duplicate,
+		"idempotency_key": result.IdempotencyKey,
+		"queued":          result.Queued,
+	}
 }
 
 // ---- result values -------------------------------------------------------

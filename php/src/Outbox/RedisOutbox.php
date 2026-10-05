@@ -10,7 +10,7 @@ use Santati\Exception\OutboxException;
 
 /**
  * An outbox on one Redis Stream with the consumer group `santati`; the layout
- * is shared by every Santati SDK, so any of them can drain what another logged.
+ * is shared by every Santati SDK, so any of them can drain what another queued.
  *
  * Takes the application's own Predis client. Entries claimed but never acked
  * are re-delivered once they have been pending for `$visibilityMs`; `release()`

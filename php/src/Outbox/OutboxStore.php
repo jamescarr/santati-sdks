@@ -7,7 +7,7 @@ namespace Santati\Outbox;
 use Santati\Exception\OutboxException;
 
 /**
- * Where `Client::log()` keeps stored events until a pass sends them.
+ * Where a queued `Events::emit()` keeps stored events until a pass sends them.
  *
  * A stored event is the emit input with `trail` and `idempotency_key` filled
  * in; JSON-encoded it is the wire envelope.
