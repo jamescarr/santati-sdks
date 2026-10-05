@@ -135,7 +135,8 @@ $client->close();
 
 `preSend` receives each stored event and returns it (possibly modified) or
 `null` to drop it. Events left in a `MemoryOutbox` are lost when the
-process dies; pass `outbox: new Santati\Outbox\RedisOutbox($predis)` (a
+process dies, including a batch `close()` or the shutdown flush could not send because the
+endpoint was down; pass `outbox: new Santati\Outbox\RedisOutbox($predis)` (a
 `Predis\ClientInterface`; install it with `composer require predis/predis`) to
 keep them in a Redis Stream that any Santati SDK can drain.
 

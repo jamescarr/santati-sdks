@@ -78,7 +78,9 @@ client = santati.Santati("sat_sk_...", trail="billing", outbox=RedisOutbox(redis
 ```
 
 `santati.MemoryOutbox(max_pending=10000)` is the in-process store; a full one
-makes a queued `emit` raise `OutboxError` (`code="outbox_full"`). `pre_send(event)` may
+makes a queued `emit` raise `OutboxError` (`code="outbox_full"`). `close()` sends each
+batch once; if the endpoint is down, what it could not send stays in the store and, in
+memory, is lost with the process (use `RedisOutbox` above to keep it). `pre_send(event)` may
 return a modified event or `None` to drop it; `post_send(event, outcome)`
 receives each original event with a `SendOutcome` (`accepted`, `duplicate`,
 `rejected` or `failed`). A batch that fails with `TransportError`,

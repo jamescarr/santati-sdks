@@ -140,6 +140,15 @@ did so (Python). `close()` is idempotent: a second call returns immediately
 without another pass. After `close()`, a queued `emit` raises `OutboxError` code
 `closed`.
 
+`close()` is one pass, and the pass sends each batch once: a batch that fails with
+a retryable error (`TransportError`, `ServerError`, `RateLimitedError`) goes back
+to the store and `close()` returns without it. A `close()` or shutdown that lands
+while the ingest endpoint is down therefore leaves its backlog in the store. With
+a `MemoryOutbox` that backlog is lost when the process exits — that is what an
+in-memory store is. Use a `RedisOutbox` when events must outlive the process: they
+stay in the stream and are re-delivered (after `visibility_ms`) to whichever process
+drains it next, in any SDK.
+
 Without an `outbox`, `flush()` returns immediately (no request, no error) and
 `close()` runs no pass (Python still clears its connection pool); `close()` is
 idempotent and `emit` keeps working afterwards — `closed` exists only for
@@ -188,7 +197,9 @@ len(claimed) >= max_pending`. `claim(n)` moves the first `n` pending entries to
 claimed; `ack` deletes from claimed; `release` moves them back to the **front**
 of pending, preserving their relative order. Entry ids are decimal strings of a
 per-store counter starting at `"1"`. `max_pending < 1` → construction raises
-`ValidationError` field `max_pending`.
+`ValidationError` field `max_pending`. Events live only as long as the process: what
+is still stored at exit, including a batch `close()` could not send, is lost. Use
+`RedisOutbox` to keep them.
 
 **`RedisOutbox(client, key="santati:outbox", visibility_ms=60000)`** — takes
 the user's existing Redis client (the SDK never opens connections). Redis

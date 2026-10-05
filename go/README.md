@@ -95,8 +95,9 @@ defer client.Close(ctx)
 res, err := client.Events.Emit(ctx, santati.EventInput{Event: "invoice.paid"}) // res.Queued == true
 ```
 
-`santati.NewMemoryOutbox(10000)` gives an in-process outbox (lost on exit). To survive
-restarts, use the Redis adapter; it takes your existing go-redis client and
+`santati.NewMemoryOutbox(10000)` gives an in-process outbox (lost on exit). `Close` sends
+each batch once; if the endpoint is down, what it could not send stays in the store and,
+in memory, is lost with the process. To survive restarts, use the Redis adapter; it takes your existing go-redis client and
 needs `go get github.com/redis/go-redis/v9`:
 
 ```go
