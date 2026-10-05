@@ -109,11 +109,13 @@ client = Santati::Client.new(
 
 result = client.events.emit(event: "invoice.voided", organization_id: "org_acme")
 result.queued # => true
-client.close # drains the outbox; a queued `emit` raises Santati::OutboxError afterwards
+client.close # sends what is left (one pass); a queued `emit` raises Santati::OutboxError afterwards
 ```
 
 `client.flush` runs one send pass now. `Santati::MemoryOutbox.new` keeps up to
-10,000 events in memory. To survive restarts, or to share one outbox between
+10,000 events in memory. `close` sends each batch once; if the endpoint is down, what it
+could not send stays in the store and, in memory, is lost with the process. To survive
+restarts, or to share one outbox between
 processes, use the Redis adapter (Redis Streams); add `gem "redis", ">= 5"` to
 your Gemfile, then:
 

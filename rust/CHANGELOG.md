@@ -10,7 +10,7 @@ and this project adheres to
 
 ### Added
 
-- An opt-in outbox: with `Builder::outbox` (`MemoryOutbox`, or Redis Streams via the `redis` feature) `Events::emit` stores the event and returns at once with `EmitResult::queued` true; a background task sends the outbox in batches of `batch_size` every `flush_interval` through `emit_batch`, with `pre_send`/`post_send` hooks, `flush()`/`close()`.
+- An opt-in outbox: with `Builder::outbox` (`MemoryOutbox`, or Redis Streams via the `redis` feature) `Events::emit` stores the event and returns at once with `EmitResult::queued` true; a background task sends the outbox in batches of `batch_size` every `flush_interval` through `emit_batch`, with `pre_send`/`post_send` hooks, `flush()`/`close()`. Each batch is sent once, without `max_retries`: a retryable failure releases it for the next pass.
 
 ### Changed
 

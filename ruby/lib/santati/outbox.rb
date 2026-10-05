@@ -176,7 +176,7 @@ module Santati
     def send_batch(to_send)
       ids = to_send.map { |entry, _| entry.id }
       begin
-        status, result = @client.events.emit_batch_with_status(to_send.map { |_, out| out })
+        status, result = @client.events.emit_batch_with_status(to_send.map { |_, out| out }, retries: false)
       rescue Error => e
         to_send.each { |entry, _| notify(entry.event, SendOutcome.new(status: "failed", error: e)) }
         if RETRYABLE.any? { |kind| e.is_a?(kind) }

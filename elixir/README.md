@@ -113,7 +113,9 @@ the process flushes it.
 Santati.Outbox.stop(MyApp.Santati)
 ```
 
-Events are held in memory by default. For a durable outbox use the Redis adapter:
+Events are held in memory by default. Stopping the outbox sends each batch once; if the
+endpoint is down, what it could not send stays in the store and, in memory, is lost with
+the process. For a durable outbox use the Redis adapter:
 add `{:redix, "~> 1.5"}` to your dependencies and pass
 `store: {Santati.Outbox.Redis, conn: redix_conn}`.
 

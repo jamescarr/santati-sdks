@@ -105,7 +105,8 @@ Without an outbox, `emit` sends the event. With `Builder::outbox`, `emit` is
 fire-and-forget: it validates like a plain `emit`, stores the envelope in the
 outbox and returns at once with `queued` set and no event, without making a
 request. A background task sends the outbox in batches; `close` stops it and
-drains what is left, so call it before exiting.
+sends what is left (one pass; during an outage the rest stays in the store), so call it
+before exiting.
 
 ```rust
 use santati::{EventInput, MemoryOutbox, Santati};
@@ -123,7 +124,9 @@ async fn main() -> Result<(), santati::Error> {
 }
 ```
 
-`MemoryOutbox` is the in-process store (lost on exit). Tune the worker with
+`MemoryOutbox` is the in-process store (lost on exit). `close()` sends each batch once; if
+the endpoint is down, what it could not send stays in the store and, in memory, is lost
+with the process. Tune the worker with
 `batch_size`, `flush_interval`, `pre_send` and `post_send` on the
 builder. For a Redis Streams store, enable the optional `redis` feature
 (`santati = { version = "0.1", features = ["redis"] }`) and pass

@@ -79,7 +79,7 @@ Without an outbox, `Events.Emit` sends the event and returns the stored one.
 With `WithOutbox`, `Emit` is fire-and-forget: it validates the event, stores it
 in the outbox and returns at once with `Queued` set and a nil `Event`, without
 making a request. A background worker sends the outbox in batches; `Close`
-stops it and drains what is left.
+stops it and sends what is left (one pass; during an outage the rest stays in the store).
 
 ```go
 store, _ := santati.NewMemoryOutbox(10000)
@@ -95,8 +95,9 @@ defer client.Close(ctx)
 res, err := client.Events.Emit(ctx, santati.EventInput{Event: "invoice.paid"}) // res.Queued == true
 ```
 
-`santati.NewMemoryOutbox(10000)` gives an in-process outbox (lost on exit). To survive
-restarts, use the Redis adapter; it takes your existing go-redis client and
+`santati.NewMemoryOutbox(10000)` gives an in-process outbox (lost on exit). `Close` sends
+each batch once; if the endpoint is down, what it could not send stays in the store and,
+in memory, is lost with the process. To survive restarts, use the Redis adapter; it takes your existing go-redis client and
 needs `go get github.com/redis/go-redis/v9`:
 
 ```go

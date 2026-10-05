@@ -13,7 +13,12 @@ defmodule Santati.MixProject do
       description: "Official Elixir SDK for the Santati audit-log API",
       source_url: "https://github.com/jamescarr/santati-sdks",
       deps: deps(),
-      package: package()
+      package: package(),
+      # test/chaos_driver.exs is a script for `mise run chaos`, not a test file.
+      test_ignore_filters: [
+        &String.ends_with?(&1, "test_helper.exs"),
+        &String.ends_with?(&1, "chaos_driver.exs")
+      ]
     ]
   end
 

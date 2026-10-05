@@ -17,6 +17,7 @@ by a shared conformance suite.
 | `generator/config.json` | the image, the `operations` allow-list, and each core's generator, properties, name mappings and copy targets |
 | `docs/sdk-surface.md` | **normative** behaviour of every facade |
 | `conformance/` | `features.json` + `cases/*.json` vectors, one native runner per SDK, `check.mjs` |
+| `chaos/` | manual outbox load and fault-injection harness: `gateway.mjs` (fault-injecting ingest stand-in), `scenarios.json` (scenarios and budgets), `sdks.json` (how to run each driver), `run.mjs`; the drivers live in each package's test tree (`python/tests/chaos_driver.py`, `typescript/src/chaos/driver.ts`, `go/chaos_test.go`, `rust/tests/chaos.rs`, `elixir/test/chaos_driver.exs`, `ruby/test/chaos_driver.rb`, `php/tests/chaos_driver.php`) |
 | `<pkg>/` (seven) | the facade, its manifest, `CHANGELOG.md`, `README.md`, `LICENSE`, and the generated core |
 | `.mise/tasks/` | every workflow command (`mise tasks ls`) |
 | `.claude/skills/` | `sdk-release`, `sdk-spec-sync`, `sdk-add-operation`, `sdk-conformance` |
@@ -35,6 +36,7 @@ by a shared conformance suite.
 | `mise run check:package <pkg>` | one package: format, lint, type-check, test, and build the way it publishes |
 | `mise run check:conformance [pkgs…]` | validate the corpus and run the SDKs against it |
 | `mise run check:drift` | regenerate into a temp tree and diff |
+| `mise run chaos [pkgs…]` | manual, not part of `check`: run each SDK's outbox against `chaos/gateway.mjs` faults (slow, blackhole, refused, flaky, recovery) and judge emit latency, loop lag, `close()` time and delivery against `chaos/scenarios.json`; `CHAOS_SCENARIOS=a,b` selects scenarios |
 | `mise run lint:workflows` | actionlint |
 | `mise run release:prepare` / `release:preflight` / `release:tag` / `release:watch` / `release:verify` / `release:notes` | see `docs/releasing.md` |
 

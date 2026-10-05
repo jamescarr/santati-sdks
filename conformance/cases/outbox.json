@@ -1137,6 +1137,79 @@
           }
         ]
       }
+    },
+    {
+      "id": "outbox.single_attempt",
+      "feature": "outbox.delivery",
+      "operation": "emit_outbox",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 2,
+          "initial_backoff_ms": 0,
+          "max_backoff_ms": 0,
+          "flush_interval_ms": 60000,
+          "batch_size": 1
+        },
+        "gateway": {
+          "status": 503,
+          "body": {
+            "json": {
+              "detail": "down"
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-1"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
+          ],
+          "outcomes": [
+            {
+              "event": {
+                "event": "invoice.voided",
+                "trail": "billing",
+                "idempotency_key": "a-1"
+              },
+              "status": "failed",
+              "error": {
+                "kind": "ServerError",
+                "status": 503
+              }
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-1"
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

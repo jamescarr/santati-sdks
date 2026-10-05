@@ -105,6 +105,7 @@ type outbox struct {
 	closed  bool
 	stop    chan struct{}
 	done    chan struct{}
+	cancel  context.CancelFunc // aborts the worker's send in progress; set by start
 }
 
 // enqueue stores the already-resolved event in the store. It never makes a
@@ -141,10 +142,15 @@ func (c *Client) Flush(ctx context.Context) error {
 	return c.outbox.flush(ctx)
 }
 
-// Close stops the outbox worker, waits for a pass in progress, then runs a
-// final Flush. It is idempotent: later calls return nil without another pass.
-// After Close, a queued Emit fails with OutboxError "closed". Without an
-// outbox, Close returns nil and Emit keeps working.
+// Close stops the outbox worker, then runs a final Flush under ctx. It is
+// idempotent: later calls return nil without another pass. After Close, a
+// queued Emit fails with OutboxError "closed". Without an outbox, Close
+// returns nil and Emit keeps working.
+//
+// Close cancels a worker send in progress (its batch is released and re-sent
+// by the final flush) and runs the final flush under ctx; if ctx ends first,
+// Close returns ctx.Err() and what was not sent stays in the store. A Flush
+// running on another goroutine holds the pass lock, and Close waits for it.
 func (c *Client) Close(ctx context.Context) error {
 	o := c.outbox
 	if o == nil {
@@ -161,9 +167,14 @@ func (c *Client) Close(ctx context.Context) error {
 
 	if started {
 		close(o.stop)
+		o.cancel()
 		<-o.done
 	}
-	return o.flush(ctx)
+	err := o.flush(ctx)
+	if err == nil && ctx.Err() != nil {
+		err = ctx.Err()
+	}
+	return err
 }
 
 func (o *outbox) start() {
@@ -178,10 +189,12 @@ func (o *outbox) start() {
 	o.started.Store(true)
 	o.stop = make(chan struct{})
 	o.done = make(chan struct{})
-	go o.run(o.stop, o.done)
+	ctx, cancel := context.WithCancel(context.Background())
+	o.cancel = cancel
+	go o.run(ctx, o.stop, o.done)
 }
 
-func (o *outbox) run(stop <-chan struct{}, done chan<- struct{}) {
+func (o *outbox) run(ctx context.Context, stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
 	timer := time.NewTimer(o.interval)
 	defer timer.Stop()
@@ -190,17 +203,18 @@ func (o *outbox) run(stop <-chan struct{}, done chan<- struct{}) {
 		case <-stop:
 			return
 		case <-timer.C:
-			o.tick()
+			o.tick(ctx)
 			timer.Reset(o.interval)
 		}
 	}
 }
 
 // tick runs one worker pass. Store failures are swallowed (the next tick
-// retries) and a panic must not kill the worker.
-func (o *outbox) tick() {
+// retries) and a panic must not kill the worker. ctx is cancelled by Close, which
+// aborts a send in progress.
+func (o *outbox) tick(ctx context.Context) {
 	defer func() { _ = recover() }()
-	_ = o.flush(context.Background())
+	_ = o.flush(ctx)
 }
 
 func (o *outbox) flush(ctx context.Context) error {
@@ -264,7 +278,12 @@ func (o *outbox) runPass(ctx context.Context) error {
 
 // send emits one batch, reports the outcomes and acks or releases the
 // entries. retry is true when the batch was released for a later pass.
+//
+// The request runs under ctx, which Close cancels; the store calls that settle
+// the batch afterwards do not, so a store that honours its context still
+// releases or acks what the aborted request left claimed.
 func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, err error) {
+	settle := context.WithoutCancel(ctx)
 	ids := make([]string, len(toSend))
 	outs := make([]EventInput, len(toSend))
 	for i, item := range toSend {
@@ -272,7 +291,7 @@ func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, er
 		outs[i] = item.out
 	}
 
-	result, sendErr := o.client.Events.EmitBatch(ctx, outs)
+	result, sendErr := o.client.Events.emitBatch(ctx, outs, false)
 	if sendErr != nil {
 		var sdkErr *Error
 		if !errors.As(sendErr, &sdkErr) {
@@ -283,12 +302,12 @@ func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, er
 		}
 		switch sdkErr.Kind {
 		case KindTransport, KindServer, KindRateLimited:
-			if err := o.store.Release(ctx, ids); err != nil {
+			if err := o.store.Release(settle, ids); err != nil {
 				return false, storeError(err)
 			}
 			return true, nil
 		default:
-			if err := o.store.Ack(ctx, ids); err != nil {
+			if err := o.store.Ack(settle, ids); err != nil {
 				return false, storeError(err)
 			}
 			return false, nil
@@ -301,7 +320,7 @@ func (o *outbox) send(ctx context.Context, toSend []pendingSend) (retry bool, er
 		}
 		o.callPostSend(toSend[item.Index].entry.Event, outcomeFor(item, result.status))
 	}
-	if err := o.store.Ack(ctx, ids); err != nil {
+	if err := o.store.Ack(settle, ids); err != nil {
 		return false, storeError(err)
 	}
 	return false, nil

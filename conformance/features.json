@@ -31,6 +31,6 @@
     {"id": "outbox.batching", "description": "A pass sends the outbox in FIFO batches of at most `batch_size` envelopes per request, keys unchanged."},
     {"id": "outbox.hooks", "description": "`pre_send` sees each stored event before its request and may modify or drop it; a raising `pre_send` leaves the event in the outbox and reports a `failed` outcome with OutboxError `hook_failed`; `post_send` receives the original event and its outcome and its exceptions are ignored."},
     {"id": "outbox.outcomes", "description": "A 202/207 answers one `post_send` outcome per sent event: accepted/duplicate with the id, rejected with a ValidationError carrying the item's code and field and the response status."},
-    {"id": "outbox.delivery", "description": "A batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."}
+    {"id": "outbox.delivery", "description": "Each batch is sent once, without the client's retries; a batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."}
   ]
 }

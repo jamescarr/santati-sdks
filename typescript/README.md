@@ -72,7 +72,8 @@ await santati.close(); // sends anything still pending
 ```
 
 `MemoryOutbox` is a bounded in-memory store (10000 events, lost on
-exit). For a durable outbox shared across processes, install the optional
+exit). `close()` sends each batch once; if the endpoint is down, what it could
+not send stays in the store and, in memory, is lost with the process. For a durable outbox shared across processes, install the optional
 `ioredis` peer dependency and pass a `RedisOutbox` (a Redis stream with the
 consumer group `santati`):
 

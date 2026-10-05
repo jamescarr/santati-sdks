@@ -439,7 +439,7 @@ async fn pass(client: &Santati, state: &Arc<OutboxState>) -> Result<(), Error> {
         }
         if !to_send.is_empty() {
             let ids: Vec<String> = to_send.iter().map(|entry| entry.id.clone()).collect();
-            match client.events().emit_batch_with_status(outs).await {
+            match client.events().emit_batch_with_status(outs, false).await {
                 Err(error) => {
                     for entry in &to_send {
                         state.failed(&entry.event, error.clone());
