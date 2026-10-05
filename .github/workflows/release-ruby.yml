@@ -59,7 +59,7 @@ jobs:
           version: 2026.9.11
           cache_key_prefix: mise-release-ruby
           install_args: ruby
-      - uses: rubygems/configure-rubygems-credentials@v2
+      - uses: rubygems/configure-rubygems-credentials@v2.1.0
 
       - name: gem build and push
         working-directory: ruby
