@@ -64,8 +64,8 @@
       "budgets": {"deliver_all": true},
       "profiles": {
         "php": {
-          "budgets": {"deliver_all": false},
-          "note": "PHP has no worker: close() is its only pass and sends each batch once, so inside the 3 s outage it leaves the backlog in the MemoryOutbox, which dies with the process. Expected; a RedisOutbox keeps it (docs/sdk-surface.md, flush() and close())."
+          "budgets": {"deliver_all": false, "deliver_none": true, "close_ms": 3000},
+          "note": "PHP has no worker: close() is its only pass and sends each batch once. It starts inside the 3 s outage, makes one attempt (close_ms <= timeout_ms + slack) and leaves the backlog in the MemoryOutbox (delivered 0), which dies with the process. A RedisOutbox keeps it (docs/sdk-surface.md, flush() and close()). If this row turns red, PHP's close() gained retries or a worker: update the docs and this row together."
         }
       }
     }

@@ -127,6 +127,9 @@ function judge(result, stats, budgets) {
   if (budgets.deliver_all && stats.delivered !== result.queued) {
     violations.push(`delivered ${stats.delivered} != queued ${result.queued}`);
   }
+  if (budgets.deliver_none && stats.delivered > 0) {
+    violations.push(`delivered ${stats.delivered}, expected none`);
+  }
   return violations;
 }
 
