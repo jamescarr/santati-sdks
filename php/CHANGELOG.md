@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
 
 - An opt-in outbox: with `outbox:` (`MemoryOutbox`, or a Redis adapter via `predis/predis`) `events->emit()` stores the event and returns at once with `EmitResult::$queued` true; `flush()`/`close()` (and the end of the script) send the outbox in batches of `batchSize` through `emitBatch()`, with `preSend`/`postSend` hooks. A batch that fails with anything but a `SantatiException` (e.g. a malformed `preSend` result) is reported to `postSend` as `OutboxException` `hook_failed` and dropped, never thrown. Each batch is sent once, without `maxRetries`: a retryable failure releases it for the next pass. With `finishRequestBeforeFlush: true` the end-of-script flush first calls `fastcgi_finish_request()` under PHP-FPM, so it does not delay the response.
@@ -21,5 +23,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/php-v0.1.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/php-v0.2.0...HEAD
+[0.2.0]: https://github.com/jamescarr/santati-sdks/compare/php-v0.1.0...php-v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/php-v0.1.0

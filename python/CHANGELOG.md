@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
 
 - An opt-in outbox: with `outbox=` (`MemoryOutbox`, or Redis Streams via
@@ -44,5 +46,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/python-v0.1.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/python-v0.2.0...HEAD
+[0.2.0]: https://github.com/jamescarr/santati-sdks/compare/python-v0.1.0...python-v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/python-v0.1.0
