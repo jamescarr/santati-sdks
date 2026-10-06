@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
 
 - An opt-in outbox: with `Builder::outbox` (`MemoryOutbox`, or Redis Streams via the `redis` feature) `Events::emit` stores the event and returns at once with `EmitResult::queued` true; a background task sends the outbox in batches of `batch_size` every `flush_interval` through `emit_batch`, with `pre_send`/`post_send` hooks, `flush()`/`close()`. Each batch is sent once, without `max_retries`: a retryable failure releases it for the next pass.
@@ -25,5 +27,6 @@ and this project adheres to
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/rust-v0.1.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/rust-v0.2.0...HEAD
+[0.2.0]: https://github.com/jamescarr/santati-sdks/compare/rust-v0.1.0...rust-v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/rust-v0.1.0

@@ -1,6 +1,6 @@
 [project]
 name = "santati"
-version = "0.1.0"
+version = "0.2.0"
 description = "Official Python SDK for the Santati audit-log API: emit audit events (one or a batch) and list or iterate over them."
 readme = "README.md"
 license = "Apache-2.0"
