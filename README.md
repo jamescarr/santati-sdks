@@ -22,6 +22,11 @@ that keep the seven packages identical on the wire.
 | [`elixir`](elixir) | Hex `santati` | `{:santati, "~> 0.1"}` | `elixir-vX.Y.Z` |
 | [`ruby`](ruby) | RubyGems `santati` | `gem install santati` | `ruby-vX.Y.Z` |
 | [`php`](php) | Packagist `santati/santati-php` | `composer require santati/santati-php` | `php-vX.Y.Z` |
+| [`terraform`](terraform) | Terraform Registry `jamescarr/santati` | `source = "jamescarr/santati"` | `terraform-vX.Y.Z` |
+
+`terraform` is the Terraform provider for trails and log streams, not an event
+SDK: it implements none of `docs/sdk-surface.md`'s operations and is exempt
+from the conformance suite.
 
 Quickstart, Python:
 

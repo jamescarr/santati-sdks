@@ -7,8 +7,8 @@
 #     [Unreleased].
 #
 #   elixir .mise/lib/release.exs apply DIR KIND NEW TAG PREV_TAG DATE
-#     Sets the version file for KIND (npm's src/version.ts, Cargo.toml, go's
-#     version.go, mix.exs, lib/santati/version.rb, src/Version.php; python's
+#     Sets the version file for KIND (npm's src/version.ts, Cargo.toml, go's and
+#     terraform's version.go, mix.exs, lib/santati/version.rb, src/Version.php; python's
 #     pyproject.toml is `uv version`'s job, so KIND python writes nothing),
 #     opens `## [NEW] - DATE` under [Unreleased] in CHANGELOG.md, and points
 #     the footer compare links at TAG. PREV_TAG may be "" (first release).
@@ -59,7 +59,7 @@ defmodule Release do
       "cargo" ->
         rewrite!(Path.join(dir, "Cargo.toml"), ~r/^version = "[^"]+"$/m, ~s(version = "#{new}"))
 
-      "go" ->
+      kind when kind in ["go", "terraform"] ->
         rewrite!(Path.join(dir, "version.go"), ~r/^const Version = "[^"]+"$/m, ~s(const Version = "#{new}"))
 
       "hex" ->

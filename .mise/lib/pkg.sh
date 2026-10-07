@@ -3,9 +3,10 @@
 # Sourced only; sets no shell options. Every releasable artifact is a
 # top-level directory of $ROOT; its name is the git tag prefix
 # (`<name>-vX.Y.Z`, or `go/vX.Y.Z` for the Go module) and its kind comes from
-# the files in it: pyproject.toml -> python, package.json -> npm, go.mod ->
-# go, Cargo.toml -> cargo, mix.exs -> hex, *.gemspec -> gem,
-# composer.json -> composer.
+# the files in it: pyproject.toml -> python, package.json -> npm,
+# terraform-registry-manifest.json -> terraform (checked before go.mod: the
+# provider has one too), go.mod -> go, Cargo.toml -> cargo, mix.exs -> hex,
+# *.gemspec -> gem, composer.json -> composer.
 #
 # Written for bash 3.2 (macOS /bin/bash): no mapfile, no associative arrays.
 
@@ -13,6 +14,7 @@ ROOT="${MISE_PROJECT_ROOT:-$(git rev-parse --show-toplevel)}"
 GITHUB_REPO=jamescarr/santati-sdks
 SPEC_REPO=jamescarr/santati-control-plane
 PHP_MIRROR=jamescarr/santati-php
+TERRAFORM_MIRROR=jamescarr/terraform-provider-santati
 
 # stderr in both cases: a failure inside `x=$(pkg_...)` must still be seen, and
 # the Actions runner picks `::error::` up from stderr as well as stdout.
@@ -32,6 +34,8 @@ _pkg_kind_of() {
     echo python
   elif [ -f "$dir/package.json" ]; then
     echo npm
+  elif [ -f "$dir/terraform-registry-manifest.json" ]; then
+    echo terraform
   elif [ -f "$dir/go.mod" ]; then
     echo go
   elif [ -f "$dir/Cargo.toml" ]; then
@@ -71,7 +75,7 @@ pkg_dir() {
 pkg_kind() {
   local name
   name=$(pkg_dir "$1") || exit 1
-  _pkg_kind_of "$name" | grep . || fail "$name has no pyproject.toml, package.json, go.mod, Cargo.toml, mix.exs, *.gemspec, or composer.json"
+  _pkg_kind_of "$name" | grep . || fail "$name has no pyproject.toml, package.json, terraform-registry-manifest.json, go.mod, Cargo.toml, mix.exs, *.gemspec, or composer.json"
 }
 
 pkg_names() {
@@ -96,7 +100,7 @@ pkg_version() {
   case "$kind" in
     python) v=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/$dir/pyproject.toml" | sed -n 1p) ;;
     npm) v=$(node -p "require('$ROOT/$dir/package.json').version") ;;
-    go) v=$(sed -n 's/^const Version = "\(.*\)"$/\1/p' "$ROOT/$dir/version.go" | sed -n 1p) ;;
+    go | terraform) v=$(sed -n 's/^const Version = "\(.*\)"$/\1/p' "$ROOT/$dir/version.go" | sed -n 1p) ;;
     # The range matters: `[[test]] name = …` is also a column-0 `name =`, and
     # only the [package] table's `version` is the crate's own.
     cargo) v=$(sed -n '/^\[package\]/,/^\[/ s/^version = "\(.*\)"$/\1/p' "$ROOT/$dir/Cargo.toml" | sed -n 1p) ;;
@@ -207,6 +211,11 @@ pkg_registry_code() {
       rm -f "$tmpfile"
       return 0
       ;;
+    terraform)
+      # The Terraform Registry namespace is the mirror's owner and the provider
+      # type its name without the `terraform-provider-` prefix.
+      url="https://registry.terraform.io/v1/providers/${TERRAFORM_MIRROR%%/*}/${TERRAFORM_MIRROR#*/terraform-provider-}/$2/download/linux/amd64"
+      ;;
   esac
   # curl prints 000 and exits non-zero when the registry is unreachable; the
   # 000 is the useful part. crates.io answers 403 to curl's own user agent, so
@@ -226,6 +235,7 @@ pkg_secrets() {
     # PyPI and RubyGems publish via Trusted Publishing (OIDC): no repo secret.
     python | gem | go) : ;;
     composer) echo PHP_MIRROR_DEPLOY_KEY ;;
+    terraform) echo TERRAFORM_MIRROR_TOKEN GPG_PRIVATE_KEY GPG_PASSPHRASE ;;
   esac
 }
 
@@ -243,6 +253,7 @@ pkg_tools() {
     hex) echo erlang,elixir,node ;;
     gem) echo ruby,node ;;
     composer) echo php,node ;;
+    terraform) echo go,terraform,goreleaser,node ;;
   esac
 }
 

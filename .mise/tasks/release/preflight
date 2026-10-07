@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Every check release:tag runs before tagging: main, CHANGELOG, free tags, unpublished versions, secrets, PHP mirror"
+#MISE description="Every check release:tag runs before tagging: main, CHANGELOG, free tags, unpublished versions, secrets, mirrors"
 #USAGE arg "<pkgs>" var=#true help="packages about to be tagged"
 set -euo pipefail
 source "$MISE_PROJECT_ROOT/.mise/lib/pkg.sh"
@@ -38,6 +38,13 @@ for p in "${pkgs[@]}"; do
   if [ "$kind" = composer ]; then
     gh repo view "$PHP_MIRROR" >/dev/null 2>&1 ||
       fail "mirror $PHP_MIRROR does not exist; see docs/releasing.md"
+  fi
+
+  # The Terraform Registry ingests releases of the mirror repo, which also
+  # carries the GoReleaser build; without it the tag publishes nothing.
+  if [ "$kind" = terraform ]; then
+    gh repo view "$TERRAFORM_MIRROR" >/dev/null 2>&1 ||
+      fail "mirror $TERRAFORM_MIRROR does not exist; see docs/releasing.md"
   fi
 
   printf '  %-12s %s -> %s\n' "$p" "$v" "$tag"

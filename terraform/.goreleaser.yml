@@ -1,0 +1,76 @@
+# Builds and signs the provider for the Terraform Registry. Based on HashiCorp's
+# terraform-provider-scaffolding-framework. It runs in a clone of the read-only
+# mirror jamescarr/terraform-provider-santati (see ../.github/workflows/release-terraform.yml),
+# where this directory is the repository root, and in check:package's snapshot build.
+# https://goreleaser.com
+version: 2
+builds:
+  - env:
+      # goreleaser does not work with CGO, and a CGO provider could not run in
+      # CI/CD systems like HCP Terraform that cannot install libraries.
+      - CGO_ENABLED=0
+    mod_timestamp: '{{ .CommitTimestamp }}'
+    flags:
+      - -trimpath
+    # Version is a const in version.go, set by release:prepare: no ldflags carry it.
+    ldflags:
+      - '-s -w'
+    goos:
+      - freebsd
+      - windows
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - '386'
+      - arm
+      - arm64
+      - s390x
+    ignore:
+      - goos: darwin
+        goarch: '386'
+      - goos: darwin
+        goarch: s390x
+      - goos: freebsd
+        goarch: s390x
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: s390x
+    binary: '{{ .ProjectName }}_v{{ .Version }}'
+project_name: terraform-provider-santati
+archives:
+  - formats:
+      - zip
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+checksum:
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+  name_template: '{{ .ProjectName }}_{{ .Version }}_SHA256SUMS'
+  algorithm: sha256
+signs:
+  - artifacts: checksum
+    args:
+      # Non-interactive: the key's passphrase arrives on stdin.
+      - '--batch'
+      - '--pinentry-mode'
+      - 'loopback'
+      - '--passphrase-fd'
+      - '0'
+      - '--local-user'
+      - '{{ .Env.GPG_FINGERPRINT }}'
+      - '--output'
+      - '${signature}'
+      - '--detach-sign'
+      - '${artifact}'
+    stdin: '{{ .Env.GPG_PASSPHRASE }}'
+release:
+  github:
+    owner: jamescarr
+    name: terraform-provider-santati
+  extra_files:
+    - glob: 'terraform-registry-manifest.json'
+      name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'
+changelog:
+  disable: true

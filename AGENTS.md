@@ -1,9 +1,10 @@
 # santati-sdks — agent guide
 
-Polyglot SDK monorepo for the Santati control plane: seven packages
+Polyglot SDK monorepo for the Santati control plane: seven SDK packages
 (`python`, `typescript`, `go`, `rust`, `elixir`, `ruby`, `php`), each an
 openapi-generator core plus a hand-written facade, kept identical on the wire
-by a shared conformance suite.
+by a shared conformance suite — and an eighth package, `terraform`, the
+Terraform provider, which is not an event SDK (see below).
 
 `CLAUDE.md` is a symlink to this file.
 
@@ -19,6 +20,7 @@ by a shared conformance suite.
 | `conformance/` | `features.json` + `cases/*.json` vectors, one native runner per SDK, `check.mjs` |
 | `chaos/` | manual outbox load and fault-injection harness: `gateway.mjs` (fault-injecting ingest stand-in), `scenarios.json` (scenarios and budgets), `sdks.json` (how to run each driver), `run.mjs`; the drivers live in each package's test tree (`python/tests/chaos_driver.py`, `typescript/src/chaos/driver.ts`, `go/chaos_test.go`, `rust/tests/chaos.rs`, `elixir/test/chaos_driver.exs`, `ruby/test/chaos_driver.rb`, `php/tests/chaos_driver.php`) |
 | `<pkg>/` (seven) | the facade, its manifest, `CHANGELOG.md`, `README.md`, `LICENSE`, and the generated core |
+| `terraform/` | the Terraform provider (`registry.terraform.io/jamescarr/santati`): Go module with a hand-written HTTP client in `internal/api`, framework resources and data sources in `internal/provider`, hermetic tests against an in-process fake control plane, generated registry `docs/` (`mise run format terraform`), `.goreleaser.yml`. Exempt from `conformance/` (`exempt` in `conformance/sdks.json`); tagged `terraform-vX.Y.Z`, published through a read-only mirror (`docs/releasing.md`) |
 | `.mise/tasks/` | every workflow command (`mise tasks ls`) |
 | `.claude/skills/` | `sdk-release`, `sdk-spec-sync`, `sdk-add-operation`, `sdk-conformance` |
 | `docs/releasing.md` | secrets, one-time registry setup, the release flow |
@@ -32,7 +34,7 @@ by a shared conformance suite.
 | `mise run format [pkgs…]` | format (generated trees excluded) |
 | `mise run spec:sync [ref]` | re-vendor `spec/santati-v0.yaml` from the control plane |
 | `mise run generate [cores…]` | rebuild the profile and regenerate the cores |
-| `mise run check` | everything CI runs: `lint:workflows`, `check:drift`, `check:package` ×7, `check:conformance` |
+| `mise run check` | everything CI runs: `lint:workflows`, `check:drift`, `check:package` ×8, `check:conformance` |
 | `mise run check:package <pkg>` | one package: format, lint, type-check, test, and build the way it publishes |
 | `mise run check:conformance [pkgs…]` | validate the corpus and run the SDKs against it |
 | `mise run check:drift` | regenerate into a temp tree and diff |

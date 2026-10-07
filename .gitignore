@@ -15,5 +15,6 @@ ruby/vendor/
 ruby/*.gem
 php/vendor/
 php/.phpunit.cache/
+terraform/dist/
 erl_crash.dump
 chaos/.results/
