@@ -108,20 +108,37 @@ const packageNames = readdirSync(ROOT, { withFileTypes: true })
     ) || readdirSync(new URL(`${name}/`, ROOT)).some((file) => file.endsWith(".gemspec")),
   );
 
+// Packages that are in the repo but implement no event operation, so there is
+// nothing to run the corpus against; each maps to the reason it is exempt.
+const exempt = sdksFile.exempt ?? {};
+
 const selected = process.argv.slice(2);
 if (selected.length === 0) {
   for (const name of packageNames) {
-    if (!(name in sdksFile.sdks)) errors.push(`${name}/ is a package but is not registered in conformance/sdks.json`);
+    if (!(name in sdksFile.sdks) && !(name in exempt)) {
+      errors.push(`${name}/ is a package but is not registered in conformance/sdks.json`);
+    }
   }
   for (const name of Object.keys(sdksFile.sdks)) {
     if (!packageNames.includes(name)) {
       errors.push(`conformance/sdks.json registers ${name}, but ${name}/ is not a package directory`);
     }
   }
+  for (const name of Object.keys(exempt)) {
+    if (!packageNames.includes(name)) {
+      errors.push(`conformance/sdks.json exempts ${name}, but ${name}/ is not a package directory`);
+    }
+    if (name in sdksFile.sdks) errors.push(`conformance/sdks.json both registers and exempts ${name}`);
+  }
 } else {
   for (const name of selected) {
-    if (!(name in sdksFile.sdks)) errors.push(`conformance/sdks.json has no SDK "${name}"`);
-    else if (!packageNames.includes(name)) errors.push(`SDK "${name}" is registered but ${name}/ is not a package directory`);
+    if (name in exempt) {
+      if (!packageNames.includes(name)) errors.push(`SDK "${name}" is exempt but ${name}/ is not a package directory`);
+    } else if (!(name in sdksFile.sdks)) {
+      errors.push(`conformance/sdks.json has no SDK "${name}"`);
+    } else if (!packageNames.includes(name)) {
+      errors.push(`SDK "${name}" is registered but ${name}/ is not a package directory`);
+    }
   }
 }
 
@@ -136,6 +153,10 @@ if (errors.length > 0) {
 const names = selected.length > 0 ? selected : Object.keys(sdksFile.sdks).sort();
 let failed = false;
 for (const name of names) {
+  if (name in exempt) {
+    console.log(`${name}  exempt: ${exempt[name]}`);
+    continue;
+  }
   const { setup = [], run } = sdksFile.sdks[name];
   const cwd = fileURLToPath(new URL(`${name}/`, ROOT));
   let code = 0;

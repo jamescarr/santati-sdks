@@ -1,6 +1,6 @@
 ---
 name: sdk-release
-description: Release one or more Santati SDKs (python, typescript, go, rust, elixir, ruby, php) — bump versions, date the CHANGELOGs, open and merge the release PR, tag, watch the publish, verify the registry. Use when the user asks to release, publish, ship, bump, or tag an SDK, or asks why a release is stuck.
+description: Release one or more Santati packages (python, typescript, go, rust, elixir, ruby, php, and the terraform provider) — bump versions, date the CHANGELOGs, open and merge the release PR, tag, watch the publish, verify the registry. Use when the user asks to release, publish, ship, bump, or tag an SDK or the provider, or asks why a release is stuck.
 allowed-tools: [
     Bash(mise run *),
     Bash(git *),
@@ -63,7 +63,7 @@ several packages; each package is versioned on its own.
 
    `release:tag` runs `release:preflight` first (clean tree, `HEAD ==
    origin/main`, heading present, tags free, versions unpublished, secrets
-   set, PHP mirror reachable) and then pushes one tag per package, printing
+   set, PHP and Terraform mirrors reachable) and then pushes one tag per package, printing
    `pushed <tag>; watch it: mise run release:watch <pkg>`.
 
 6. **Watch each publish.**
@@ -96,6 +96,9 @@ several packages; each package is versioned on its own.
 - `repo secret <NAME> is not set` — add it (docs/releasing.md) and re-run.
 - `mirror jamescarr/santati-php does not exist` — the PHP mirror repo is not
   created yet; docs/releasing.md, "Packagist (php)".
+- `mirror jamescarr/terraform-provider-santati does not exist` — the Terraform
+  mirror repo is not created yet; docs/releasing.md, "Terraform Registry
+  (terraform)".
 - A publish run that fails after the tag exists: fix the cause and re-run the
   workflow from the Actions UI (`gh run rerun <id>`) rather than re-tagging.
   The registry check in `release:verify` tells you whether it published.

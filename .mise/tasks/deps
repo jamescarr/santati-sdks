@@ -15,7 +15,7 @@ for p in "${pkgs[@]}"; do
   case "$kind" in
     python) (cd "$dir" && uv sync) ;;
     npm) (cd "$dir" && npm ci) ;;
-    go) (cd "$dir" && go mod download) ;;
+    go | terraform) (cd "$dir" && go mod download) ;;
     cargo) (cd "$dir" && cargo fetch) ;;
     hex) (cd "$dir" && mix deps.get) ;;
     gem) (cd "$dir" && bundle install) ;;

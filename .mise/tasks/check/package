@@ -70,4 +70,20 @@ case "$kind" in
     vendor/bin/pint --test
     vendor/bin/phpunit
     ;;
+  terraform)
+    go mod verify
+    [ -z "$(gofmt -l .)" ] || fail "$dir has files gofmt would rewrite: $(gofmt -l .)"
+    terraform fmt -check -recursive examples
+    go vet ./...
+    TF_ACC_TERRAFORM_PATH="$(command -v terraform)" go test -race ./...
+    # --provider-name is mandatory: tfplugindocs otherwise names the provider
+    # after the directory (`terraform`). Compared against a copy rather than
+    # `git status` so a not-yet-committed but fresh docs/ tree passes too.
+    tmp=$(mktemp -d)
+    cp -R docs "$tmp/docs"
+    go tool tfplugindocs generate --provider-name santati
+    diff -r "$tmp/docs" docs >/dev/null || fail "$dir/docs is stale: run mise run format terraform and commit it"
+    goreleaser check
+    goreleaser build --snapshot --clean --single-target --output "$tmp/terraform-provider-santati"
+    ;;
 esac

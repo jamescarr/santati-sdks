@@ -37,5 +37,12 @@ for p in "${pkgs[@]}"; do
     composer)
       (cd "$dir" && vendor/bin/pint)
       ;;
+    terraform)
+      # Docs are generated from the schema descriptions and the examples, so
+      # they are rewritten here rather than hand-edited.
+      gofmt -w "$dir"
+      terraform fmt -recursive "$dir/examples"
+      (cd "$dir" && go tool tfplugindocs generate --provider-name santati)
+      ;;
   esac
 done

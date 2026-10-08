@@ -6,4 +6,7 @@
   "elixir":     {"setup": [["mix", "deps.get"]],                                                  "run": ["mix", "test", "test/conformance_test.exs"]},
   "ruby":       {"setup": [["bundle", "install"]],                                                "run": ["bundle", "exec", "ruby", "-Ilib", "-Itest", "test/conformance_test.rb"]},
   "php":        {"setup": [["composer", "install", "--no-interaction", "--no-progress"]],         "run": ["vendor/bin/phpunit", "tests/ConformanceTest.php"]}
+},
+"exempt": {
+  "terraform": "Terraform provider: manages trails and log streams, implements no event operation"
 }}

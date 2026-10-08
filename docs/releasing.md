@@ -14,6 +14,7 @@ publishes:
 | `elixir` | `mix.exs` | `elixir-vX.Y.Z` | [`release-elixir.yml`](https://github.com/jamescarr/santati-sdks/blob/main/.github/workflows/release-elixir.yml) | Hex `santati` |
 | `ruby` | `*.gemspec` | `ruby-vX.Y.Z` | [`release-ruby.yml`](https://github.com/jamescarr/santati-sdks/blob/main/.github/workflows/release-ruby.yml) | RubyGems `santati` |
 | `php` | `composer.json` | `php-vX.Y.Z` | [`release-php.yml`](https://github.com/jamescarr/santati-sdks/blob/main/.github/workflows/release-php.yml) | Packagist `santati/santati-php` (mirror) |
+| `terraform` | `terraform-registry-manifest.json` | `terraform-vX.Y.Z` | [`release-terraform.yml`](https://github.com/jamescarr/santati-sdks/blob/main/.github/workflows/release-terraform.yml) | Terraform Registry `jamescarr/santati` (mirror) |
 
 Unlike a monorepo whose packages depend on each other, nothing here depends on
 anything else, so there is no ordering constraint: any subset can be tagged in
@@ -35,7 +36,7 @@ mise run release:verify python
    isn't `origin/main`, and refuses a package whose `CHANGELOG.md` has nothing
    under `[Unreleased]`. For each package it sets the version file (`version`
    in `pyproject.toml` via `uv version`, `src/version.ts` + `package.json` via
-   `npm version`, `Cargo.toml` + `Cargo.lock`, `version.go`, `@version` in
+   `npm version`, `Cargo.toml` + `Cargo.lock`, `version.go` (go and terraform), `@version` in
    `mix.exs`, `lib/santati/version.rb` + `Gemfile.lock`, or `src/Version.php`),
    opens a dated `## [X.Y.Z]` heading under `[Unreleased]`, and points the
    footer compare links at the new tag. It commits all of them on
@@ -78,6 +79,9 @@ Repository secrets, under Settings → Secrets and variables → Actions.
 | `CARGO_REGISTRY_TOKEN` | rust | crates.io API token with `publish-new` (first release) and `publish-update` |
 | `HEX_API_KEY` | elixir | Hex key scoped to `api:write` |
 | `PHP_MIRROR_DEPLOY_KEY` | php | write deploy key of the `jamescarr/santati-php` mirror |
+| `TERRAFORM_MIRROR_TOKEN` | terraform | fine-grained PAT with access to **only** the `jamescarr/terraform-provider-santati` mirror and Contents read/write |
+| `GPG_PRIVATE_KEY` | terraform | ASCII-armored **RSA** private key (`gpg --armor --export-secret-keys <id>`) that signs the release checksums; the Terraform Registry does not accept ECC keys |
+| `GPG_PASSPHRASE` | terraform | that key's passphrase |
 | `SPEC_SYNC_TOKEN` | spec-sync workflow | fine-grained PAT: contents read on `jamescarr/santati-control-plane`, contents + pull requests write on this repo |
 
 PyPI, RubyGems and Go need no repository secret: PyPI and RubyGems publish via
@@ -148,6 +152,32 @@ the read-only mirror `jamescarr/santati-php`:
    its GitHub webhook, so the mirror's tag push triggers an update.
 4. `release:preflight php` fails with "mirror jamescarr/santati-php does not
    exist; see docs/releasing.md" until step 1 is done.
+
+### Terraform Registry (terraform)
+
+The Terraform Registry only ingests a repository named
+`terraform-provider-<type>` whose releases carry GoReleaser's signed, zipped
+builds, so `terraform/` is published through the read-only mirror
+`jamescarr/terraform-provider-santati`. The workflow exports `terraform/` to
+the mirror, tags it `vX.Y.Z`, and runs GoReleaser inside the clone. The
+provider is `registry.terraform.io/jamescarr/santati`.
+
+1. Create the empty public repo `jamescarr/terraform-provider-santati`.
+2. Create the fine-grained PAT (Contents read/write on that repo only) and
+   store it as `TERRAFORM_MIRROR_TOKEN`.
+3. Create an **RSA** GPG key, store the armored private key as
+   `GPG_PRIVATE_KEY` and its passphrase as `GPG_PASSPHRASE`, and add the
+   armored public key at registry.terraform.io → the `jamescarr` namespace →
+   Signing Keys.
+4. Run the release flow once (`release:tag terraform`). When the workflow has
+   created release `v0.1.0` on the mirror, sign in to the registry, choose
+   **Publish → Provider**, and select the mirror. That installs the webhook
+   that ingests every later release.
+5. `release:verify terraform` answers once the registry has ingested the
+   release (its download endpoint returns 200).
+6. `release:preflight terraform` fails with "mirror
+   jamescarr/terraform-provider-santati does not exist; see
+   docs/releasing.md" until step 1 is done.
 
 ### Go
 
