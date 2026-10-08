@@ -63,9 +63,6 @@ PHP cannot tell an empty JSON object from an empty array: an empty object nested
 inside a schema document must be passed as `\stdClass`. `createVersion()` is
 sent once, because a repeat would create a second draft.
 
-```php
-```
-
 ## Errors
 
 Every failure is a `Santati\Exception\SantatiException` with `getStatus()`,

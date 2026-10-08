@@ -3,7 +3,7 @@
  * configuration, one attempt's transport and error mapping, and the decoders.
  * The retry loop is `withRetries`.
  */
-import { Configuration, FetchError, ResponseError } from "./core/index.js";
+import { Configuration, FetchError, RequiredError, ResponseError } from "./core/index.js";
 import type { ClientConfig } from "./client.js";
 import {
   ApiError,
@@ -138,9 +138,12 @@ export async function send(attempt: () => Promise<{ raw: Response }>): Promise<R
     .then(({ raw }) => raw)
     .catch((error: unknown) => {
       // A non-2xx answer is an error object carrying the response, not a
-      // throw of its own; anything fetch could not answer at all is transport.
+      // throw of its own; anything fetch could not answer at all is transport;
+      // a parameter the generated core requires but was not given (an
+      // `undefined` version, say) is a local validation failure.
       if (error instanceof ResponseError) return error.response;
       if (error instanceof FetchError) throw new TransportError(error.cause?.message ?? error.message);
+      if (error instanceof RequiredError) throw new ValidationError(error.message, { field: error.field });
       throw error;
     });
   const raw = {

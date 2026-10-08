@@ -28,11 +28,15 @@ module Santati
     end
 
     # Runs the generated core and translates its `ApiError` into the facade's
-    # own error kinds.
+    # own error kinds. A required parameter the generated core refuses (a nil
+    # `version`, say) raises `ArgumentError` before any request: a local
+    # validation failure.
     def generated
       yield
     rescue SantatiCore::ApiError => e
       raise Santati.from_api_error(e)
+    rescue ArgumentError => e
+      raise ValidationError.new(e.message)
     end
 
     # A generated request model rejecting a spec constraint (a length, an
