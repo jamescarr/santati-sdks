@@ -19,8 +19,16 @@ ERROR_KINDS = {
   "ServerError" => Santati::ServerError,
   "TransportError" => Santati::TransportError,
   "ApiError" => Santati::ApiError,
-  "OutboxError" => Santati::OutboxError
+  "OutboxError" => Santati::OutboxError,
+  "SchemaValidationError" => Santati::SchemaValidationError
 }.freeze
+
+# WEBrick's proc handler answers GET, POST and PUT only; the schema operations
+# also send PATCH and DELETE.
+class ProcHandlerForEveryMethod < WEBrick::HTTPServlet::ProcHandler
+  alias_method :do_PATCH, :do_GET
+  alias_method :do_DELETE, :do_GET
+end
 
 # A real HTTP server standing in for the API: it answers every request with
 # the vector's gateway spec and records what it saw.
@@ -39,7 +47,7 @@ class ConformanceGateway
       AccessLog: []
     )
     @base_url = "http://127.0.0.1:#{@server.listeners.first.addr[1]}"
-    @server.mount_proc("/") { |request, response| handle(request, response) }
+    @server.mount("/", ProcHandlerForEveryMethod.new(proc { |request, response| handle(request, response) }))
     @thread = Thread.new { @server.start }
     wait_until_running
   end
@@ -203,6 +211,42 @@ class ConformanceTest < Minitest::Test
       page_ok(client.events.list(**symbolize(input.fetch("params", {}))))
     when "iterate"
       client.events.iterate(**symbolize(input.fetch("params", {}))).map { |event| wire(event) }
+    when "list_definitions"
+      page_ok(client.schemas.list_definitions(**symbolize(input.fetch("params", {}))))
+    when "iterate_definitions"
+      client.schemas.iterate_definitions(**symbolize(input.fetch("params", {}))).map { |definition| wire(definition) }
+    when "get_definition"
+      wire(client.schemas.get_definition(input.fetch("action")))
+    when "create_definition"
+      wire(client.schemas.create_definition(**symbolize(input.fetch("definition"))))
+    when "update_definition"
+      wire(client.schemas.update_definition(input.fetch("action"), **symbolize(input.fetch("changes"))))
+    when "delete_definition"
+      client.schemas.delete_definition(input.fetch("action"))
+    when "list_versions"
+      page_ok(client.schemas.list_versions(input.fetch("action"), **symbolize(input.fetch("params", {}))))
+    when "iterate_versions"
+      client.schemas.iterate_versions(input.fetch("action"), **symbolize(input.fetch("params", {}))).map { |version| wire(version) }
+    when "get_version"
+      version_ok(client.schemas.get_version(input.fetch("action"), input.fetch("version")))
+    when "create_version"
+      version_ok(client.schemas.create_version(input.fetch("action"), input.fetch("schema")))
+    when "update_version"
+      version_ok(client.schemas.update_version(
+        input.fetch("action"), input.fetch("version"), input.fetch("schema"), if_match: input["if_match"]
+      ))
+    when "delete_version"
+      client.schemas.delete_version(input.fetch("action"), input.fetch("version"))
+    when "publish_version"
+      version_ok(client.schemas.publish_version(input.fetch("action"), input.fetch("version")))
+    when "deprecate_version"
+      version_ok(client.schemas.deprecate_version(input.fetch("action"), input.fetch("version")))
+    when "check_schema"
+      wire(client.schemas.check_schema(input.fetch("action"), input.fetch("schema")))
+    when "list_standard_packs"
+      wire(client.schemas.list_standard_packs)
+    when "install_standard_packs"
+      wire(client.schemas.install_standard_packs(input.fetch("packs")))
     else
       raise "unknown operation #{operation.inspect}"
     end
@@ -258,6 +302,10 @@ class ConformanceTest < Minitest::Test
       "results" => page.results.map { |event| wire(event) },
       "next_cursor" => page.next_cursor
     }
+  end
+
+  def version_ok(result)
+    {"schema_version" => wire(result.schema_version), "etag" => result.etag}
   end
 
   # A generated read model, back to wire (snake_case) JSON.
@@ -317,6 +365,8 @@ class ConformanceTest < Minitest::Test
       expected.each_with_index do |value, index|
         assert_match_value(value, actual[index], bindings, strip_nulls: strip_nulls)
       end
+    when nil
+      assert_nil actual
     else
       assert_equal expected, actual
     end

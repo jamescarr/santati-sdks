@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `client.schemas`: event definitions (`list_definitions`, `iterate_definitions`, `get_definition`, `create_definition`, `update_definition`, `delete_definition`), their schema versions (`list_versions`, `iterate_versions`, `get_version`, `create_version`, `update_version` with `if_match:`, `delete_version`, `publish_version`, `deprecate_version`, `check_schema`) and the standard packs (`list_standard_packs`, `install_standard_packs`). `create_version` is sent once, never retried.
+- `schema_version:` on `events.emit`, on `emit_batch` items and on queued events, to pin an emit to one published version of the action's schema.
+- `Santati::SchemaValidationError`, a subclass of `ValidationError`.
+
+### Changed
+
+- A 400, 413 or 422 whose code is `schema_validation_failed` (and a rejected outbox item with that code) now raises `Santati::SchemaValidationError`; existing `rescue Santati::ValidationError` clauses still catch it.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

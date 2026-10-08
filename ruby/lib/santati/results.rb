@@ -17,4 +17,16 @@ module Santati
 
   # One page of `list`: the events and the cursor for the next page, if any.
   EventPage = Data.define(:results, :next_cursor)
+
+  # One page of `schemas.list_definitions`: the definitions and the cursor for
+  # the next page, if any.
+  DefinitionPage = Data.define(:results, :next_cursor)
+
+  # One page of `schemas.list_versions`: the versions (newest first) and the
+  # cursor for the next page, if any.
+  SchemaVersionPage = Data.define(:results, :next_cursor)
+
+  # A schema version and the `ETag` header its response carried (nil when
+  # absent), to pass back as `if_match` to `schemas.update_version`.
+  SchemaVersionResult = Data.define(:schema_version, :etag)
 end
