@@ -69,6 +69,8 @@ release:
   github:
     owner: jamescarr
     name: terraform-provider-santati
+  # A re-run after a partial upload replaces the assets instead of failing.
+  replace_existing_artifacts: true
   extra_files:
     - glob: 'terraform-registry-manifest.json'
       name_template: '{{ .ProjectName }}_{{ .Version }}_manifest.json'

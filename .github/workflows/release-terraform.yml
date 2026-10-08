@@ -70,9 +70,19 @@ jobs:
         id: gpg
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          source .mise/lib/pkg.sh
           printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
-          echo "fingerprint=$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" {print $10; exit}')" >> "$GITHUB_OUTPUT"
+          fpr=$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" {print $10; exit}')
+          [ -n "$fpr" ] || fail "GPG_PRIVATE_KEY holds no secret key"
+          # Sign a throwaway file now: a wrong key or passphrase must fail here,
+          # before the export step pushes the release tag to the mirror.
+          echo check > "$RUNNER_TEMP/gpg-check"
+          printf '%s' "$GPG_PASSPHRASE" | gpg --batch --pinentry-mode loopback --passphrase-fd 0 \
+            --local-user "$fpr" --output "$RUNNER_TEMP/gpg-check.sig" --detach-sign "$RUNNER_TEMP/gpg-check" ||
+            fail "GPG_PASSPHRASE does not unlock the key in GPG_PRIVATE_KEY"
+          echo "fingerprint=$fpr" >> "$GITHUB_OUTPUT"
 
       - name: Export terraform/ to the mirror
         env:
@@ -82,13 +92,23 @@ jobs:
           source .mise/lib/pkg.sh
           git clone "https://x-access-token:${MIRROR_TOKEN}@github.com/$TERRAFORM_MIRROR.git" "$RUNNER_TEMP/mirror"
           cd "$RUNNER_TEMP/mirror"
-          git rm -rq --ignore-unmatch .
-          git -C "$GITHUB_WORKSPACE" archive HEAD:terraform | tar -x -C .
-          git add -A
-          git -c user.name="santati-release" -c user.email="release@users.noreply.github.com" \
-            commit -qm "terraform-provider-santati $VERSION (santati-sdks $GITHUB_SHA)"
-          git tag "v$VERSION"
-          git push origin HEAD:main "v$VERSION"
+          subject="terraform-provider-santati $VERSION (santati-sdks $GITHUB_SHA)"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            # A re-run after a later step failed: the export already happened.
+            # Build from the tag it made, provided it came from this commit.
+            git fetch --quiet origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            [ "$(git log -1 --format=%s "v$VERSION")" = "$subject" ] ||
+              fail "the mirror's v$VERSION was not exported from $GITHUB_SHA"
+            git checkout --quiet "v$VERSION"
+          else
+            git rm -rq --ignore-unmatch .
+            git -C "$GITHUB_WORKSPACE" archive HEAD:terraform | tar -x -C .
+            git add -A
+            git -c user.name="santati-release" -c user.email="release@users.noreply.github.com" \
+              commit -qm "$subject"
+            git tag "v$VERSION"
+            git push origin HEAD:main "v$VERSION"
+          fi
 
       - name: Build, sign and release from the mirror
         env:
@@ -110,4 +130,9 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           source .mise/lib/pkg.sh && pkg_notes terraform "$VERSION" > "$RUNNER_TEMP/notes.md"
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          # A re-run after this step already succeeded must not fail on it.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
