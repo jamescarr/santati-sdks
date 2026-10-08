@@ -112,6 +112,7 @@ func (p *santatiProvider) Resources(context.Context) []func() resource.Resource 
 	return []func() resource.Resource{
 		NewTrailResource,
 		NewLogStreamResource,
+		NewEventSchemaResource,
 	}
 }
 

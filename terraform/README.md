@@ -1,8 +1,8 @@
 # terraform-provider-santati
 
-The Terraform provider for the Santati control plane. It manages **trails** and
-**log streams** and reads **trails**, **organizations** and **event
-definitions**.
+The Terraform provider for the Santati control plane. It manages **trails**,
+**log streams** and **event schemas** and reads **trails**,
+**organizations** and **event definitions**.
 
 ```hcl
 terraform {
@@ -25,7 +25,7 @@ resource "santati_trail" "billing" {
 
 | Kind | Name |
 | --- | --- |
-| resource | `santati_trail`, `santati_log_stream` |
+| resource | `santati_trail`, `santati_log_stream`, `santati_event_schema` |
 | data source | `santati_trails`, `santati_organizations`, `santati_event_definitions` |
 
 The full reference is in [`docs/`](docs/) and on the
@@ -47,6 +47,14 @@ trails. Pass it as `api_key` or in `SANTATI_API_KEY`; the provider sends it as
   `invalid`, the next apply sets it back to `active`.
 - `config.timeout_seconds` defaults to 15, the control plane's effective
   default.
+- `santati_event_schema` holds the current JSON Schema of one action, which
+  must already be in the event catalog; use one resource per action. Changing
+  a published document publishes a new version, and the server deprecates the
+  old one. `publish = false` keeps a draft that is edited in place. Published
+  versions cannot be deleted, so destroying the resource leaves a published
+  version enforced on the server and only forgets it. If someone else
+  publishes a newer version, the next apply publishes your document again as
+  another new version.
 - The provider is not an event SDK: it implements none of
   `docs/sdk-surface.md`'s operations and is exempt from `conformance/`.
 
