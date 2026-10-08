@@ -240,6 +240,93 @@
         },
         "requests": []
       }
+    },
+    {
+      "id": "batch.schema_version_pin",
+      "feature": "emit.schema_version",
+      "operation": "emit_batch",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 202,
+          "body": {
+            "json": {
+              "accepted": 2,
+              "rejected": 0,
+              "results": [
+                {
+                  "index": 0,
+                  "status": "accepted",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+                },
+                {
+                  "index": 1,
+                  "status": "accepted",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB"
+                }
+              ]
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-1",
+            "schema_version": 1
+          },
+          {
+            "event": "invoice.paid",
+            "trail": "payments",
+            "idempotency_key": "a-2"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "accepted": 2,
+          "rejected": 0,
+          "results": [
+            {
+              "index": 0,
+              "status": "accepted",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+            },
+            {
+              "index": 1,
+              "status": "accepted",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDB"
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-1",
+                  "schema_version": 1
+                },
+                {
+                  "event": "invoice.paid",
+                  "trail": "payments",
+                  "idempotency_key": "a-2"
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

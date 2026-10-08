@@ -1210,6 +1210,196 @@
           }
         ]
       }
+    },
+    {
+      "id": "outbox.schema_version_pin",
+      "feature": "emit.schema_version",
+      "operation": "emit_outbox",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0,
+          "flush_interval_ms": 60000
+        },
+        "gateway": {
+          "status": 202,
+          "body": {
+            "json": {
+              "accepted": 1,
+              "rejected": 0,
+              "results": [
+                {
+                  "index": 0,
+                  "status": "accepted",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+                }
+              ]
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-1",
+            "schema_version": 3
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            }
+          ],
+          "outcomes": [
+            {
+              "event": {
+                "event": "invoice.voided",
+                "trail": "billing",
+                "idempotency_key": "a-1",
+                "schema_version": 3
+              },
+              "status": "accepted",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-1",
+                  "schema_version": 3
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "outbox.rejected_schema_validation",
+      "feature": "errors.schema_validation",
+      "operation": "emit_outbox",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0,
+          "flush_interval_ms": 60000
+        },
+        "gateway": {
+          "status": 207,
+          "body": {
+            "json": {
+              "accepted": 1,
+              "rejected": 1,
+              "results": [
+                {
+                  "index": 0,
+                  "status": "accepted",
+                  "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+                },
+                {
+                  "index": 1,
+                  "status": "rejected",
+                  "error": {
+                    "code": "schema_validation_failed",
+                    "message": "metadata.invoice_number is required.",
+                    "field": "metadata.invoice_number"
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "events": [
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-1"
+          },
+          {
+            "event": "invoice.voided",
+            "idempotency_key": "a-2"
+          }
+        ]
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "duplicate": false,
+              "idempotency_key": "a-1",
+              "queued": true
+            },
+            {
+              "duplicate": false,
+              "idempotency_key": "a-2",
+              "queued": true
+            }
+          ],
+          "outcomes": [
+            {
+              "event": {
+                "event": "invoice.voided",
+                "trail": "billing",
+                "idempotency_key": "a-1"
+              },
+              "status": "accepted",
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA"
+            },
+            {
+              "event": {
+                "event": "invoice.voided",
+                "trail": "billing",
+                "idempotency_key": "a-2"
+              },
+              "status": "rejected",
+              "error": {
+                "kind": "SchemaValidationError",
+                "status": 207,
+                "code": "schema_validation_failed",
+                "field": "metadata.invoice_number"
+              }
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "events": [
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-1"
+                },
+                {
+                  "event": "invoice.voided",
+                  "trail": "billing",
+                  "idempotency_key": "a-2"
+                }
+              ]
+            }
+          }
+        ]
+      }
     }
   ]
 }

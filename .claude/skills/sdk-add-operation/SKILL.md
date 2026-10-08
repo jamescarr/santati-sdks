@@ -57,7 +57,7 @@ in one PR.
 5. **Implement it in all seven packages**: `python`, `typescript`, `go`,
    `rust`, `elixir`, `ruby`, `php`. Each facade follows its existing
    `emit`/`list` shape: local validation first, the generated core for the
-   request, mapping to the same seven error kinds, retries unchanged. The
+   request, mapping to the same error kinds, retries unchanged. The
    generated core is never edited.
 
 6. **Run the whole gate.**

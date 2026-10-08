@@ -1,0 +1,1891 @@
+{
+  "cases": [
+    {
+      "id": "schemas.list_definitions",
+      "feature": "schemas.pages",
+      "operation": "list_definitions",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": "https://api.santati.io/api/v0/event-definitions/?cursor=cD00ODY%3D&limit=2",
+              "previous": null,
+              "results": [
+                {
+                  "action": "invoice.voided",
+                  "description": "An issued invoice was voided before payment.",
+                  "allowed_target_types": [
+                    "invoice"
+                  ],
+                  "is_active": true,
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "updated_at": "2026-09-29T14:03:11.482000Z"
+                }
+              ]
+            }
+          }
+        },
+        "params": {
+          "limit": 2,
+          "cursor": "c1"
+        }
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          ],
+          "next_cursor": "cD00ODY="
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/?cursor=c1&limit=2",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.iterate_definitions",
+      "feature": "schemas.pages",
+      "operation": "iterate_definitions",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "sequence": [
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": "https://api.santati.io/api/v0/event-definitions/?cursor=cD00ODY%3D&limit=1",
+                  "previous": null,
+                  "results": [
+                    {
+                      "action": "invoice.voided",
+                      "description": "An issued invoice was voided before payment.",
+                      "allowed_target_types": [
+                        "invoice"
+                      ],
+                      "is_active": true,
+                      "created_at": "2026-09-29T14:03:11.482000Z",
+                      "updated_at": "2026-09-29T14:03:11.482000Z"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": null,
+                  "previous": null,
+                  "results": [
+                    {
+                      "action": "invoice.paid",
+                      "description": "An invoice was paid in full.",
+                      "allowed_target_types": [
+                        "invoice"
+                      ],
+                      "is_active": true,
+                      "created_at": "2026-09-29T14:03:11.482000Z",
+                      "updated_at": "2026-09-29T14:03:11.482000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "params": {
+          "limit": 1
+        }
+      },
+      "expect": {
+        "ok": [
+          {
+            "action": "invoice.voided",
+            "description": "An issued invoice was voided before payment.",
+            "allowed_target_types": [
+              "invoice"
+            ],
+            "is_active": true,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:03:11.482000Z"
+          },
+          {
+            "action": "invoice.paid",
+            "description": "An invoice was paid in full.",
+            "allowed_target_types": [
+              "invoice"
+            ],
+            "is_active": true,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:03:11.482000Z"
+          }
+        ],
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/?limit=1",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/?cursor=cD00ODY%3D&limit=1",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.get_definition",
+      "feature": "schemas.definitions",
+      "operation": "get_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          }
+        },
+        "action": "invoice.voided"
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:03:11.482000Z"
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.base_path",
+      "feature": "schemas.definitions",
+      "operation": "get_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0,
+          "base_path": "/proxy"
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          }
+        },
+        "action": "invoice.voided"
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:03:11.482000Z"
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/proxy/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.create_definition",
+      "feature": "schemas.definitions",
+      "operation": "create_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "body": {
+            "json": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          }
+        },
+        "definition": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true
+        }
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:03:11.482000Z"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.create_definition_minimal",
+      "feature": "schemas.definitions",
+      "operation": "create_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "body": {
+            "json": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          }
+        },
+        "definition": {
+          "action": "invoice.voided"
+        }
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:03:11.482000Z"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "action": "invoice.voided"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.create_definition_unexpected_status",
+      "feature": "schemas.definitions",
+      "operation": "create_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          }
+        },
+        "definition": {
+          "action": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 200
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "action": "invoice.voided"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.update_definition_rename",
+      "feature": "schemas.definitions",
+      "operation": "update_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "action": "invoice.cancelled",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": false,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:20:05.001000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "changes": {
+          "new_action": "invoice.cancelled",
+          "is_active": false
+        }
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.cancelled",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": false,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:20:05.001000Z"
+        },
+        "requests": [
+          {
+            "method": "PATCH",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "action": "invoice.cancelled",
+              "is_active": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.update_definition_empty",
+      "feature": "schemas.definitions",
+      "operation": "update_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "action": "invoice.voided",
+              "description": "An issued invoice was voided before payment.",
+              "allowed_target_types": [
+                "invoice"
+              ],
+              "is_active": true,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:03:11.482000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "changes": {}
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:03:11.482000Z"
+        },
+        "requests": [
+          {
+            "method": "PATCH",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {}
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.delete_definition",
+      "feature": "schemas.definitions",
+      "operation": "delete_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 204
+        },
+        "action": "invoice.voided"
+      },
+      "expect": {
+        "ok": null,
+        "requests": [
+          {
+            "method": "DELETE",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.delete_definition_not_found",
+      "feature": "schemas.definitions",
+      "operation": "delete_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 404,
+          "body": {
+            "json": {
+              "detail": "No EventDefinition matches the given query."
+            }
+          }
+        },
+        "action": "invoice.voided"
+      },
+      "expect": {
+        "error": {
+          "kind": "NotFoundError",
+          "status": 404
+        },
+        "requests": [
+          {
+            "method": "DELETE",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.list_versions",
+      "feature": "schemas.pages",
+      "operation": "list_versions",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "next": null,
+              "previous": null,
+              "results": [
+                {
+                  "version": 2,
+                  "status": "draft",
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "metadata": {
+                        "type": "object",
+                        "required": [
+                          "invoice_number"
+                        ]
+                      }
+                    }
+                  },
+                  "published_at": null,
+                  "deprecated_at": null,
+                  "deprecation_deadline": null,
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "updated_at": "2026-09-29T14:20:05.001000Z"
+                }
+              ]
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "params": {
+          "limit": 1
+        }
+      },
+      "expect": {
+        "ok": {
+          "results": [
+            {
+              "version": 2,
+              "status": "draft",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              },
+              "published_at": null,
+              "deprecated_at": null,
+              "deprecation_deadline": null,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:20:05.001000Z"
+            }
+          ],
+          "next_cursor": null
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/?limit=1",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.iterate_versions",
+      "feature": "schemas.pages",
+      "operation": "iterate_versions",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "sequence": [
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": "https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cD00ODY%3D",
+                  "previous": null,
+                  "results": [
+                    {
+                      "version": 2,
+                      "status": "draft",
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "metadata": {
+                            "type": "object",
+                            "required": [
+                              "invoice_number"
+                            ]
+                          }
+                        }
+                      },
+                      "published_at": null,
+                      "deprecated_at": null,
+                      "deprecation_deadline": null,
+                      "created_at": "2026-09-29T14:03:11.482000Z",
+                      "updated_at": "2026-09-29T14:20:05.001000Z"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "next": null,
+                  "previous": null,
+                  "results": [
+                    {
+                      "version": 3,
+                      "status": "draft",
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "metadata": {
+                            "type": "object",
+                            "required": [
+                              "invoice_number"
+                            ]
+                          }
+                        }
+                      },
+                      "published_at": null,
+                      "deprecated_at": null,
+                      "deprecation_deadline": null,
+                      "created_at": "2026-09-29T14:03:11.482000Z",
+                      "updated_at": "2026-09-29T14:20:05.001000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "action": "invoice.voided",
+        "params": {}
+      },
+      "expect": {
+        "ok": [
+          {
+            "version": 2,
+            "status": "draft",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": null,
+            "deprecated_at": null,
+            "deprecation_deadline": null,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:20:05.001000Z"
+          },
+          {
+            "version": 3,
+            "status": "draft",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": null,
+            "deprecated_at": null,
+            "deprecation_deadline": null,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:20:05.001000Z"
+          }
+        ],
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cD00ODY%3D",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.get_version_etag",
+      "feature": "schemas.versions",
+      "operation": "get_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "headers": {
+            "etag": "\"v2-1\""
+          },
+          "body": {
+            "json": {
+              "version": 2,
+              "status": "draft",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              },
+              "published_at": null,
+              "deprecated_at": null,
+              "deprecation_deadline": null,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:20:05.001000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "version": 2
+      },
+      "expect": {
+        "ok": {
+          "schema_version": {
+            "version": 2,
+            "status": "draft",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": null,
+            "deprecated_at": null,
+            "deprecation_deadline": null,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:20:05.001000Z"
+          },
+          "etag": "\"v2-1\""
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.create_version",
+      "feature": "schemas.versions",
+      "operation": "create_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "headers": {
+            "etag": "\"v2-1\""
+          },
+          "body": {
+            "json": {
+              "version": 2,
+              "status": "draft",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              },
+              "published_at": null,
+              "deprecated_at": null,
+              "deprecation_deadline": null,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:20:05.001000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "required": [
+                "invoice_number"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "schema_version": {
+            "version": 2,
+            "status": "draft",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": null,
+            "deprecated_at": null,
+            "deprecation_deadline": null,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:20:05.001000Z"
+          },
+          "etag": "\"v2-1\""
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.create_version_not_retried",
+      "feature": "schemas.retry",
+      "operation": "create_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 2,
+          "initial_backoff_ms": 1,
+          "max_backoff_ms": 5
+        },
+        "gateway": {
+          "sequence": [
+            {
+              "status": 503,
+              "body": {
+                "json": {
+                  "detail": "unavailable"
+                }
+              }
+            },
+            {
+              "status": 201,
+              "body": {
+                "json": {
+                  "version": 2,
+                  "status": "draft",
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "metadata": {
+                        "type": "object",
+                        "required": [
+                          "invoice_number"
+                        ]
+                      }
+                    }
+                  },
+                  "published_at": null,
+                  "deprecated_at": null,
+                  "deprecation_deadline": null,
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "updated_at": "2026-09-29T14:20:05.001000Z"
+                }
+              }
+            }
+          ]
+        },
+        "action": "invoice.voided",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "required": [
+                "invoice_number"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ServerError",
+          "status": 503
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.get_definition_retried",
+      "feature": "schemas.retry",
+      "operation": "get_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 2,
+          "initial_backoff_ms": 1,
+          "max_backoff_ms": 5
+        },
+        "gateway": {
+          "sequence": [
+            {
+              "status": 503,
+              "body": {
+                "text": "unavailable"
+              }
+            },
+            {
+              "status": 200,
+              "body": {
+                "json": {
+                  "action": "invoice.voided",
+                  "description": "An issued invoice was voided before payment.",
+                  "allowed_target_types": [
+                    "invoice"
+                  ],
+                  "is_active": true,
+                  "created_at": "2026-09-29T14:03:11.482000Z",
+                  "updated_at": "2026-09-29T14:03:11.482000Z"
+                }
+              }
+            }
+          ]
+        },
+        "action": "invoice.voided"
+      },
+      "expect": {
+        "ok": {
+          "action": "invoice.voided",
+          "description": "An issued invoice was voided before payment.",
+          "allowed_target_types": [
+            "invoice"
+          ],
+          "is_active": true,
+          "created_at": "2026-09-29T14:03:11.482000Z",
+          "updated_at": "2026-09-29T14:03:11.482000Z"
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          },
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.update_version_if_match",
+      "feature": "schemas.versions",
+      "operation": "update_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "headers": {
+            "etag": "\"v2-2\""
+          },
+          "body": {
+            "json": {
+              "version": 2,
+              "status": "draft",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              },
+              "published_at": null,
+              "deprecated_at": null,
+              "deprecation_deadline": null,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:20:05.001000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "version": 2,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "required": [
+                "invoice_number"
+              ]
+            }
+          }
+        },
+        "if_match": "\"v2-1\""
+      },
+      "expect": {
+        "ok": {
+          "schema_version": {
+            "version": 2,
+            "status": "draft",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": null,
+            "deprecated_at": null,
+            "deprecation_deadline": null,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:20:05.001000Z"
+          },
+          "etag": "\"v2-2\""
+        },
+        "requests": [
+          {
+            "method": "PUT",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+              "if-match": "\"v2-1\""
+            },
+            "body": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.update_version_precondition_failed",
+      "feature": "schemas.versions",
+      "operation": "update_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 412,
+          "body": {
+            "json": {
+              "detail": "The version changed since it was read."
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "version": 2,
+        "schema": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "required": [
+                "invoice_number"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 412
+        },
+        "requests": [
+          {
+            "method": "PUT",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.delete_version",
+      "feature": "schemas.versions",
+      "operation": "delete_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 204
+        },
+        "action": "invoice.voided",
+        "version": 2
+      },
+      "expect": {
+        "ok": null,
+        "requests": [
+          {
+            "method": "DELETE",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.delete_version_published",
+      "feature": "schemas.versions",
+      "operation": "delete_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 409,
+          "body": {
+            "json": {
+              "detail": "A published version cannot be deleted."
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "version": 2
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 409
+        },
+        "requests": [
+          {
+            "method": "DELETE",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.publish_version",
+      "feature": "schemas.versions",
+      "operation": "publish_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "headers": {
+            "etag": "\"v2-3\""
+          },
+          "body": {
+            "json": {
+              "version": 2,
+              "status": "published",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              },
+              "published_at": "2026-09-29T14:25:00.000000Z",
+              "deprecated_at": null,
+              "deprecation_deadline": null,
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:25:00.000000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "version": 2
+      },
+      "expect": {
+        "ok": {
+          "schema_version": {
+            "version": 2,
+            "status": "published",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": "2026-09-29T14:25:00.000000Z",
+            "deprecated_at": null,
+            "deprecation_deadline": null,
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:25:00.000000Z"
+          },
+          "etag": "\"v2-3\""
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/publish/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.deprecate_version",
+      "feature": "schemas.versions",
+      "operation": "deprecate_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "version": 1,
+              "status": "deprecated",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              },
+              "published_at": "2026-09-01T09:00:00.000000Z",
+              "deprecated_at": "2026-09-29T14:25:00.000000Z",
+              "deprecation_deadline": "2026-10-29T14:25:00.000000Z",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "updated_at": "2026-09-29T14:25:00.000000Z"
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "version": 1
+      },
+      "expect": {
+        "ok": {
+          "schema_version": {
+            "version": 1,
+            "status": "deprecated",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "metadata": {
+                  "type": "object",
+                  "required": [
+                    "invoice_number"
+                  ]
+                }
+              }
+            },
+            "published_at": "2026-09-01T09:00:00.000000Z",
+            "deprecated_at": "2026-09-29T14:25:00.000000Z",
+            "deprecation_deadline": "2026-10-29T14:25:00.000000Z",
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "updated_at": "2026-09-29T14:25:00.000000Z"
+          },
+          "etag": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/1/deprecate/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.check_schema",
+      "feature": "schemas.check",
+      "operation": "check_schema",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "checked": 2,
+              "failed": 1,
+              "failures": [
+                {
+                  "event_id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+                  "occurred_at": "2026-09-29T14:03:11.482000Z",
+                  "field": "metadata.invoice_number",
+                  "message": "'invoice_number' is a required property"
+                }
+              ]
+            }
+          }
+        },
+        "action": "invoice.voided",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "required": [
+                "invoice_number"
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "checked": 2,
+          "failed": 1,
+          "failures": [
+            {
+              "event_id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "occurred_at": "2026-09-29T14:03:11.482000Z",
+              "field": "metadata.invoice_number",
+              "message": "'invoice_number' is a required property"
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/check/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "required": [
+                      "invoice_number"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.list_standard_packs",
+      "feature": "schemas.standard",
+      "operation": "list_standard_packs",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "packs": [
+                {
+                  "slug": "agents",
+                  "name": "AI agents",
+                  "description": "Actions an AI agent takes.",
+                  "events": [
+                    {
+                      "action": "agent.tool.called",
+                      "description": "An agent called a tool.",
+                      "target_types": [
+                        "agent"
+                      ],
+                      "required_metadata": [
+                        "gen_ai.tool.name"
+                      ],
+                      "optional_metadata": [
+                        "source"
+                      ],
+                      "schema": {
+                        "type": "object",
+                        "properties": {
+                          "metadata": {
+                            "type": "object",
+                            "required": [
+                              "invoice_number"
+                            ]
+                          }
+                        }
+                      },
+                      "ocsf": {
+                        "version": "1.9.0",
+                        "class_uid": 6003,
+                        "activity_id": 99,
+                        "status_id": null
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expect": {
+        "ok": {
+          "packs": [
+            {
+              "slug": "agents",
+              "name": "AI agents",
+              "description": "Actions an AI agent takes.",
+              "events": [
+                {
+                  "action": "agent.tool.called",
+                  "description": "An agent called a tool.",
+                  "target_types": [
+                    "agent"
+                  ],
+                  "required_metadata": [
+                    "gen_ai.tool.name"
+                  ],
+                  "optional_metadata": [
+                    "source"
+                  ],
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "metadata": {
+                        "type": "object",
+                        "required": [
+                          "invoice_number"
+                        ]
+                      }
+                    }
+                  },
+                  "ocsf": {
+                    "version": "1.9.0",
+                    "class_uid": 6003,
+                    "activity_id": 99,
+                    "status_id": null
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/standard-events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.install_standard_packs",
+      "feature": "schemas.standard",
+      "operation": "install_standard_packs",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "json": {
+              "created": [
+                "agent.tool.called"
+              ],
+              "skipped": [
+                "agent.created"
+              ]
+            }
+          }
+        },
+        "packs": [
+          "agents",
+          "mcp"
+        ]
+      },
+      "expect": {
+        "ok": {
+          "created": [
+            "agent.tool.called"
+          ],
+          "skipped": [
+            "agent.created"
+          ]
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/standard-events/install/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "packs": [
+                "agents",
+                "mcp"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.install_unknown_pack_forwarded",
+      "feature": "schemas.standard",
+      "operation": "install_standard_packs",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 400,
+          "body": {
+            "json": {
+              "packs": {
+                "0": [
+                  "\"not-a-pack\" is not a valid choice."
+                ]
+              }
+            }
+          }
+        },
+        "packs": [
+          "not-a-pack"
+        ]
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": 400,
+          "code": null,
+          "field": null
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/standard-events/install/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "packs": [
+                "not-a-pack"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "schemas.empty_action",
+      "feature": "schemas.validation",
+      "operation": "get_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "boom"
+          }
+        },
+        "action": ""
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": null,
+          "field": "action"
+        },
+        "requests": []
+      }
+    },
+    {
+      "id": "schemas.empty_action_create",
+      "feature": "schemas.validation",
+      "operation": "create_definition",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 500,
+          "body": {
+            "text": "boom"
+          }
+        },
+        "definition": {
+          "action": ""
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": null,
+          "field": "action"
+        },
+        "requests": []
+      }
+    },
+    {
+      "id": "schemas.undecodable_body",
+      "feature": "schemas.versions",
+      "operation": "get_version",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 200,
+          "body": {
+            "text": "not json"
+          }
+        },
+        "action": "invoice.voided",
+        "version": 2
+      },
+      "expect": {
+        "error": {
+          "kind": "ApiError",
+          "status": 200
+        },
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/v0/event-definitions/invoice.voided/schema-versions/2/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

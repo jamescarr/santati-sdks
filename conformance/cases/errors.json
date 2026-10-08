@@ -111,7 +111,7 @@
     },
     {
       "id": "errors.unprocessable",
-      "feature": "errors.mapping",
+      "feature": "errors.schema_validation",
       "operation": "emit",
       "input": {
         "client": {
@@ -137,7 +137,7 @@
       },
       "expect": {
         "error": {
-          "kind": "ValidationError",
+          "kind": "SchemaValidationError",
           "status": 422,
           "code": "schema_validation_failed",
           "field": "data.amount_cents"
@@ -593,6 +593,110 @@
         "error": {
           "kind": "ApiError",
           "status": 201
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.schema_version_pin_rejected",
+      "feature": "errors.schema_validation",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 400,
+          "body": {
+            "json": {
+              "error": {
+                "code": "schema_validation_failed",
+                "message": "Action 'invoice.voided' has no schema to version 9.",
+                "field": "schema_version"
+              }
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided",
+          "schema_version": 9
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "SchemaValidationError",
+          "status": 400,
+          "code": "schema_validation_failed",
+          "field": "schema_version"
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              },
+              "schema_version": 9
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "errors.unknown_action_is_validation",
+      "feature": "errors.schema_validation",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 400,
+          "body": {
+            "json": {
+              "error": {
+                "code": "unknown_action",
+                "message": "Action 'invoice.voided' is not defined.",
+                "field": "event"
+              }
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided"
+        }
+      },
+      "expect": {
+        "error": {
+          "kind": "ValidationError",
+          "status": 400,
+          "code": "unknown_action",
+          "field": "event"
         },
         "requests": [
           {

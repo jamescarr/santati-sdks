@@ -1,5 +1,10 @@
 {
-  "operations": ["emit", "emit_batch", "list", "iterate", "emit_outbox"],
+  "operations": [
+    "emit", "emit_batch", "list", "iterate", "emit_outbox",
+    "list_definitions", "iterate_definitions", "get_definition", "create_definition", "update_definition", "delete_definition",
+    "list_versions", "iterate_versions", "get_version", "create_version", "update_version", "delete_version",
+    "publish_version", "deprecate_version", "check_schema", "list_standard_packs", "install_standard_packs"
+  ],
   "error_kinds": [
     "ValidationError",
     "AuthError",
@@ -8,7 +13,8 @@
     "ServerError",
     "TransportError",
     "ApiError",
-    "OutboxError"
+    "OutboxError",
+    "SchemaValidationError"
   ],
   "features": [
     {"id": "client.auth", "description": "Authenticates every request with the team API key in `Authorization: Api-Key <key>`, plus any extra client headers; constructing a client with an empty `api_key` or an `authorization` header raises ValidationError before any request."},
@@ -31,6 +37,15 @@
     {"id": "outbox.batching", "description": "A pass sends the outbox in FIFO batches of at most `batch_size` envelopes per request, keys unchanged."},
     {"id": "outbox.hooks", "description": "`pre_send` sees each stored event before its request and may modify or drop it; a raising `pre_send` leaves the event in the outbox and reports a `failed` outcome with OutboxError `hook_failed`; `post_send` receives the original event and its outcome and its exceptions are ignored."},
     {"id": "outbox.outcomes", "description": "A 202/207 answers one `post_send` outcome per sent event: accepted/duplicate with the id, rejected with a ValidationError carrying the item's code and field and the response status."},
-    {"id": "outbox.delivery", "description": "Each batch is sent once, without the client's retries; a batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."}
+    {"id": "outbox.delivery", "description": "Each batch is sent once, without the client's retries; a batch whose request fails with TransportError, ServerError or RateLimitedError is released for a later pass and the pass ends; any other failure drops the batch; both report `failed` outcomes."},
+    {"id": "emit.schema_version", "description": "Forwards an integer `schema_version` pin unchanged on emit, on each batch item and in the stored outbox event; omitted when absent, never validated locally."},
+    {"id": "errors.schema_validation", "description": "A 400, 413 or 422 whose code is `schema_validation_failed` raises SchemaValidationError; other validation codes stay ValidationError; a rejected outbox item with that code reports SchemaValidationError."},
+    {"id": "schemas.definitions", "description": "get/create/update/delete an event definition on its exact path with only the supplied members (`new_action` sent as `action`); 200/201 answer the EventDefinition, 204 answers nothing, any other 2xx raises ApiError."},
+    {"id": "schemas.versions", "description": "get/create/update/delete/publish/deprecate a schema version on its exact path with `{\"schema\": …}` bodies, `If-Match` only when given, and the response `ETag` returned verbatim beside the EventSchemaVersion."},
+    {"id": "schemas.pages", "description": "Lists and iterates definitions and versions with `cursor`/`limit` in spec order and the next cursor decoded from `next`."},
+    {"id": "schemas.check", "description": "Dry-runs a document and answers the SchemaCheck."},
+    {"id": "schemas.standard", "description": "Lists the standard catalog and installs packs, forwarding slugs unchanged for the server to judge."},
+    {"id": "schemas.validation", "description": "An empty `action` raises ValidationError field `action` before any request."},
+    {"id": "schemas.retry", "description": "Schema operations retry like events, except `create_version`, which is sent once."}
   ]
 }
