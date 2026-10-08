@@ -16,7 +16,15 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, TypeVar
 
-from ._errors import OutboxError, RateLimitedError, SantatiError, ServerError, TransportError, ValidationError
+from ._errors import (
+    OutboxError,
+    RateLimitedError,
+    SantatiError,
+    ServerError,
+    TransportError,
+    ValidationError,
+    validation_kind,
+)
 from ._types import BatchItem, EventInput
 
 if TYPE_CHECKING:
@@ -269,7 +277,7 @@ def _outcome(item: BatchItem, status: int) -> SendOutcome:
     error = item.error
     return SendOutcome(
         "rejected",
-        error=ValidationError(
+        error=validation_kind(error.code if error else None)(
             error.message if error else "rejected",
             status=status,
             code=error.code if error else None,

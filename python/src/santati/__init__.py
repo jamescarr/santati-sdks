@@ -18,7 +18,16 @@ from __future__ import annotations
 
 from santati_core.models.audit_event import AuditEvent
 from santati_core.models.event_actor import EventActor
+from santati_core.models.event_definition import EventDefinition
+from santati_core.models.event_schema_version import EventSchemaVersion
 from santati_core.models.event_target import EventTarget
+from santati_core.models.ocsf_mapping import OcsfMapping
+from santati_core.models.schema_check import SchemaCheck
+from santati_core.models.schema_check_failure import SchemaCheckFailure
+from santati_core.models.standard_event import StandardEvent
+from santati_core.models.standard_event_catalog import StandardEventCatalog
+from santati_core.models.standard_pack import StandardPack
+from santati_core.models.standard_pack_install_result import StandardPackInstallResult
 
 from ._client import DEFAULT_BASE_URL, Events, Santati
 from ._client import __version__ as __version__
@@ -29,19 +38,24 @@ from ._errors import (
     OutboxError,
     RateLimitedError,
     SantatiError,
+    SchemaValidationError,
     ServerError,
     TransportError,
     ValidationError,
 )
 from ._outbox import MemoryOutbox, OutboxEntry, OutboxStore, PostSendHook, PreSendHook, SendOutcome
+from ._schemas import Schemas
 from ._types import (
     ActorInput,
     BatchItem,
     BatchItemError,
     BatchResult,
+    DefinitionPage,
     EmitResult,
     EventInput,
     EventPage,
+    SchemaVersionPage,
+    SchemaVersionResult,
     TargetInput,
 )
 
@@ -54,14 +68,18 @@ __all__ = [
     "BatchItem",
     "BatchItemError",
     "BatchResult",
+    "DefinitionPage",
     "EmitResult",
     "EventActor",
+    "EventDefinition",
     "EventInput",
     "EventPage",
+    "EventSchemaVersion",
     "EventTarget",
     "Events",
     "MemoryOutbox",
     "NotFoundError",
+    "OcsfMapping",
     "OutboxEntry",
     "OutboxError",
     "OutboxStore",
@@ -70,8 +88,18 @@ __all__ = [
     "RateLimitedError",
     "Santati",
     "SantatiError",
+    "SchemaCheck",
+    "SchemaCheckFailure",
+    "SchemaValidationError",
+    "SchemaVersionPage",
+    "SchemaVersionResult",
+    "Schemas",
     "SendOutcome",
     "ServerError",
+    "StandardEvent",
+    "StandardEventCatalog",
+    "StandardPack",
+    "StandardPackInstallResult",
     "TargetInput",
     "TransportError",
     "ValidationError",

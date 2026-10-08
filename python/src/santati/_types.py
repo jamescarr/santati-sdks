@@ -1,7 +1,8 @@
-"""Inputs and results of the event operations.
+"""Inputs and results of the event and schema operations.
 
-``AuditEvent``, ``EventActor`` and ``EventTarget`` are the generated read
-models, re-exported from the package root; the types here are the facade's own
+``AuditEvent``, ``EventActor``, ``EventTarget`` and the schema read models
+(``EventDefinition``, ``EventSchemaVersion``, …) are the generated models,
+re-exported from the package root; the types here are the facade's own
 (hand-written) shapes.
 """
 
@@ -13,6 +14,8 @@ from typing import Any
 from typing_extensions import NotRequired, TypedDict
 
 from santati_core.models.audit_event import AuditEvent
+from santati_core.models.event_definition import EventDefinition
+from santati_core.models.event_schema_version import EventSchemaVersion
 
 
 class ActorInput(TypedDict):
@@ -46,6 +49,7 @@ class EventInput(TypedDict):
     context: NotRequired[dict[str, Any]]
     created_at: NotRequired[str]
     idempotency_key: NotRequired[str]
+    schema_version: NotRequired[int]
 
 
 @dataclass(frozen=True)
@@ -92,3 +96,27 @@ class EventPage:
 
     results: list[AuditEvent]
     next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class DefinitionPage:
+    """One page of event definitions and the cursor that reads the next one."""
+
+    results: list[EventDefinition]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class SchemaVersionPage:
+    """One page of an action's schema versions and the cursor that reads the next one."""
+
+    results: list[EventSchemaVersion]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class SchemaVersionResult:
+    """A schema version and the ``ETag`` header the response carried (``None`` when absent), to send back as ``if_match``."""
+
+    schema_version: EventSchemaVersion
+    etag: str | None

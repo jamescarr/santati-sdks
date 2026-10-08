@@ -37,6 +37,7 @@ ERROR_CLASSES: dict[str, type[BaseException]] = {
         "TransportError",
         "ApiError",
         "OutboxError",
+        "SchemaValidationError",
     )
 }
 
@@ -106,6 +107,15 @@ def _gateway(spec: dict[str, Any], requests: list[RecordedRequest]) -> Iterator[
             self._handle()
 
         def do_POST(self) -> None:
+            self._handle()
+
+        def do_PUT(self) -> None:
+            self._handle()
+
+        def do_PATCH(self) -> None:
+            self._handle()
+
+        def do_DELETE(self) -> None:
             self._handle()
 
         def log_message(self, *args: Any) -> None:
@@ -185,6 +195,67 @@ def _run_iterate(case: dict[str, Any], base_url: str) -> Any:
     return [event.to_dict() for event in events]
 
 
+def _version_result(result: santati.SchemaVersionResult) -> dict[str, Any]:
+    return {"schema_version": result.schema_version.to_dict(), "etag": result.etag}
+
+
+def _schema_runner(method: str, *keys: str, render: Callable[[Any], Any]) -> Runner:
+    """A runner calling ``client.schemas.<method>`` with the case input's ``keys`` as positional arguments."""
+
+    def run(case: dict[str, Any], base_url: str) -> Any:
+        with _open_client(case["input"], base_url) as client:
+            return render(getattr(client.schemas, method)(*(case["input"][key] for key in keys)))
+
+    return run
+
+
+def _run_with_params(method: str, *keys: str, render: Callable[[Any], Any]) -> Runner:
+    """Like :func:`_schema_runner`, plus the case's ``params`` as keyword arguments."""
+
+    def run(case: dict[str, Any], base_url: str) -> Any:
+        with _open_client(case["input"], base_url) as client:
+            args = (case["input"][key] for key in keys)
+            return render(getattr(client.schemas, method)(*args, **case["input"].get("params", {})))
+
+    return run
+
+
+def _run_create_definition(case: dict[str, Any], base_url: str) -> Any:
+    definition = dict(case["input"]["definition"])
+    with _open_client(case["input"], base_url) as client:
+        return client.schemas.create_definition(definition.pop("action"), **definition).to_dict()
+
+
+def _run_update_definition(case: dict[str, Any], base_url: str) -> Any:
+    with _open_client(case["input"], base_url) as client:
+        return client.schemas.update_definition(case["input"]["action"], **case["input"]["changes"]).to_dict()
+
+
+def _run_update_version(case: dict[str, Any], base_url: str) -> Any:
+    spec = case["input"]
+    with _open_client(spec, base_url) as client:
+        result = client.schemas.update_version(
+            spec["action"], spec["version"], spec["schema"], if_match=spec.get("if_match")
+        )
+    return _version_result(result)
+
+
+def _page(page: Any) -> dict[str, Any]:
+    return {"results": [item.to_dict() for item in page.results], "next_cursor": page.next_cursor}
+
+
+def _wire(model: Any) -> dict[str, Any]:
+    return model.to_dict()  # type: ignore[no-any-return]  # pydantic model from the generated core
+
+
+def _items(items: Iterator[Any]) -> list[dict[str, Any]]:
+    return [item.to_dict() for item in items]
+
+
+def _nothing(_result: None) -> None:
+    return None
+
+
 def _run_emit_outbox(case: dict[str, Any], base_url: str) -> Any:
     """Emit every event through an outbox, close, and report the results and each post_send outcome."""
     hooks = case["input"].get("hooks") or {}
@@ -247,6 +318,23 @@ RUNNERS: dict[str, Runner] = {
     "list": _run_list,
     "iterate": _run_iterate,
     "emit_outbox": _run_emit_outbox,
+    "list_definitions": _run_with_params("list_definitions", render=_page),
+    "iterate_definitions": _run_with_params("iterate_definitions", render=_items),
+    "get_definition": _schema_runner("get_definition", "action", render=_wire),
+    "create_definition": _run_create_definition,
+    "update_definition": _run_update_definition,
+    "delete_definition": _schema_runner("delete_definition", "action", render=_nothing),
+    "list_versions": _run_with_params("list_versions", "action", render=_page),
+    "iterate_versions": _run_with_params("iterate_versions", "action", render=_items),
+    "get_version": _schema_runner("get_version", "action", "version", render=_version_result),
+    "create_version": _schema_runner("create_version", "action", "schema", render=_version_result),
+    "update_version": _run_update_version,
+    "delete_version": _schema_runner("delete_version", "action", "version", render=_nothing),
+    "publish_version": _schema_runner("publish_version", "action", "version", render=_version_result),
+    "deprecate_version": _schema_runner("deprecate_version", "action", "version", render=_version_result),
+    "check_schema": _schema_runner("check_schema", "action", "schema", render=_wire),
+    "list_standard_packs": _schema_runner("list_standard_packs", render=_wire),
+    "install_standard_packs": _schema_runner("install_standard_packs", "packs", render=_wire),
 }
 
 

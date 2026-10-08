@@ -3,20 +3,16 @@
 from __future__ import annotations
 
 import importlib.metadata
-import json
-import re
-import urllib.parse
 import uuid
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from types import TracebackType
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import urllib3
-from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 from typing_extensions import Self
 
-from santati_core import ApiClient, AuditEventsApi, Configuration
+from santati_core import ApiClient, AuditEventsApi, Configuration, EventDefinitionsApi
 from santati_core.models.audit_event import AuditEvent
 from santati_core.models.event_batch_item_result import EventBatchItemResult
 from santati_core.models.event_batch_request import EventBatchRequest
@@ -25,18 +21,11 @@ from santati_core.models.event_envelope_request import EventEnvelopeRequest
 from santati_core.models.event_ingest_request import EventIngestRequest
 from santati_core.models.paginated_audit_event_list import PaginatedAuditEventList
 
-from ._errors import (
-    ApiError,
-    AuthError,
-    NotFoundError,
-    RateLimitedError,
-    SantatiError,
-    ServerError,
-    TransportError,
-    ValidationError,
-)
+from ._errors import ValidationError
+from ._http import _attempt, _decode, _error_from_response, _next_cursor, _read, _validation_error
 from ._outbox import OutboxStore, PostSendHook, PreSendHook, _Outbox
 from ._retry import RetryPolicy
+from ._schemas import Schemas
 from ._types import (
     ActorInput,
     BatchItem,
@@ -53,8 +42,6 @@ __version__: str = importlib.metadata.version("santati")
 
 DEFAULT_BASE_URL = "https://api.santati.io"
 """Where requests go when no ``base_url`` is given."""
-
-_MODEL = TypeVar("_MODEL", bound=BaseModel)
 
 
 class Santati:
@@ -116,9 +103,13 @@ class Santati:
         self._api_client.user_agent = f"santati-python/{__version__}"
         _apply_default_headers(self._api_client, self.headers)
         self._api = AuditEventsApi(self._api_client)
+        self._definitions_api = EventDefinitionsApi(self._api_client)
 
         self.events = Events(self)
         """The audit-event operations: ``emit``, ``emit_batch``, ``list``, ``iterate``."""
+
+        self.schemas = Schemas(self)
+        """The event-definition, schema-version and standard-pack operations."""
 
         self._outbox: _Outbox | None = (
             None
@@ -183,11 +174,15 @@ class Events:
         context: Mapping[str, Any] | None = None,
         created_at: str | None = None,
         idempotency_key: str | None = None,
+        schema_version: int | None = None,
     ) -> EmitResult:
         """Index one event, or with an ``outbox`` store it for the background worker and return at once.
 
-        A repeated ``idempotency_key`` returns the stored event. A queued emit
-        never makes a request: the result has ``event=None`` and ``queued=True``.
+        A repeated ``idempotency_key`` returns the stored event. ``schema_version``
+        pins the emit to one published schema version of the action (an integer,
+        forwarded unchanged and never validated here; the server answers an
+        unusable pin with :class:`SchemaValidationError`). A queued emit never
+        makes a request: the result has ``event=None`` and ``queued=True``.
         Raises :class:`OutboxError` when the store refuses the event or the
         client is closed.
         """
@@ -202,6 +197,7 @@ class Events:
             context=context,
             created_at=created_at,
             idempotency_key=idempotency_key,
+            schema_version=schema_version,
             default_trail=self._client.trail,
             field_prefix="",
         )
@@ -249,6 +245,7 @@ class Events:
                 context=item.get("context"),
                 created_at=item.get("created_at"),
                 idempotency_key=item.get("idempotency_key"),
+                schema_version=item.get("schema_version"),
                 default_trail=self._client.trail,
                 field_prefix=f"events[{index}].",
             )
@@ -391,6 +388,7 @@ def _build_envelope(
     context: Mapping[str, Any] | None,
     created_at: str | None,
     idempotency_key: str | None,
+    schema_version: int | None,
     default_trail: str | None,
     field_prefix: str,
 ) -> dict[str, Any]:
@@ -416,6 +414,7 @@ def _build_envelope(
         ("data", data),
         ("context", context),
         ("created_at", created_at),
+        ("schema_version", schema_version),
     ):
         if value is not None:
             envelope[name] = value
@@ -430,93 +429,8 @@ def _envelope_model(envelope: Mapping[str, Any]) -> EventEnvelopeRequest:
         raise _validation_error(err) from err
 
 
-def _validation_error(err: PydanticValidationError) -> ValidationError:
-    location = err.errors()[0]["loc"]
-    return ValidationError(str(err), field=".".join(str(part) for part in location))
-
-
-def _attempt(request: Callable[[], urllib3.HTTPResponse]) -> tuple[int, Any, bytes]:
-    """Make one request and read its body, mapping transport failures."""
-    try:
-        response = request()
-        try:
-            return response.status, response.headers, response.data
-        finally:
-            response.release_conn()
-    except urllib3.exceptions.HTTPError as err:
-        raise TransportError(f"{type(err).__name__}: {err}") from err
-
-
-def _read(response: urllib3.HTTPResponse) -> tuple[int, Any, bytes]:
-    """Read a response that was already made (see :func:`_attempt`)."""
-    return _attempt(lambda: response)
-
-
-def _decode(model: type[_MODEL], body: bytes, status: int) -> _MODEL:
-    """Parse a success body with the generated read model."""
-    try:
-        parsed = json.loads(body)
-    except ValueError as err:
-        raise ApiError(f"HTTP {status}: response body is not JSON", status=status) from err
-    try:
-        return model.model_validate(parsed)
-    except PydanticValidationError as err:
-        raise ApiError(f"HTTP {status}: response body does not match the schema", status=status) from err
-
-
 def _batch_item(item: EventBatchItemResult) -> BatchItem:
     error = None
     if item.error is not None:
         error = BatchItemError(code=item.error.code, message=item.error.message, field=item.error.var_field)
     return BatchItem(index=item.index, status=item.status, id=item.id, error=error)
-
-
-def _next_cursor(next_url: str | None) -> str | None:
-    """The decoded ``cursor`` of a page's ``next`` URL, or ``None``."""
-    if not next_url:
-        return None
-    values = urllib.parse.parse_qs(urllib.parse.urlsplit(next_url).query).get("cursor")
-    return values[0] if values else None
-
-
-def _error_from_response(status: int, headers: Any, body: bytes) -> SantatiError:
-    kind = _error_kind(status)
-    code: str | None = None
-    field: str | None = None
-    message = f"HTTP {status}"
-    try:
-        parsed = json.loads(body)
-    except ValueError:
-        parsed = None
-    if isinstance(parsed, dict):
-        error = parsed.get("error")
-        if isinstance(error, dict) and isinstance(error.get("code"), str):
-            code = error["code"]
-            if isinstance(error.get("field"), str):
-                field = error["field"]
-            if isinstance(error.get("message"), str):
-                message = error["message"]
-        elif isinstance(parsed.get("detail"), str):
-            message = parsed["detail"]
-    return kind(message, status=status, code=code, field=field, retry_after=_retry_after(headers))
-
-
-def _error_kind(status: int) -> type[SantatiError]:
-    if status in (400, 413, 422):
-        return ValidationError
-    if status in (401, 403):
-        return AuthError
-    if status == 404:
-        return NotFoundError
-    if status == 429:
-        return RateLimitedError
-    if 500 <= status <= 599:
-        return ServerError
-    return ApiError
-
-
-def _retry_after(headers: Any) -> int | None:
-    value = headers.get("Retry-After")
-    if isinstance(value, str) and re.fullmatch(r"\d+", value):
-        return int(value)
-    return None
