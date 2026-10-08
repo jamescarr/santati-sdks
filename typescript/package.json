@@ -1,6 +1,6 @@
 {
   "name": "@santati/node",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Official TypeScript SDK for the Santati audit-log API",
   "license": "Apache-2.0",
   "type": "module",

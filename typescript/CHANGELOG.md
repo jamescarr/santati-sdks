@@ -6,6 +6,8 @@ All notable changes to `@santati/node` are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
 ### Added
 
 - `santati.schemas`: event definitions (`listDefinitions`, `iterateDefinitions`, `getDefinition`, `createDefinition`, `updateDefinition`, `deleteDefinition`), their schema versions (`listVersions`, `iterateVersions`, `getVersion`, `createVersion`, `updateVersion` with `ifMatch`, `deleteVersion`, `publishVersion`, `deprecateVersion`, `checkSchema`) and the standard packs (`listStandardPacks`, `installStandardPacks`). `createVersion` is sent once, never retried.
@@ -33,6 +35,7 @@ All notable changes to `@santati/node` are documented here. Format follows
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/typescript-v0.2.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/typescript-v0.3.0...HEAD
+[0.3.0]: https://github.com/jamescarr/santati-sdks/compare/typescript-v0.2.0...typescript-v0.3.0
 [0.2.0]: https://github.com/jamescarr/santati-sdks/compare/typescript-v0.1.0...typescript-v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/typescript-v0.1.0
