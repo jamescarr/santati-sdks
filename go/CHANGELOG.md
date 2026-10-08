@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
 ### Added
 
 - `client.Schemas`: event definitions (`ListDefinitions`, `IterateDefinitions`, `GetDefinition`, `CreateDefinition`, `UpdateDefinition`, `DeleteDefinition`), their schema versions (`ListVersions`, `IterateVersions`, `GetVersion`, `CreateVersion`, `UpdateVersion` with `ifMatch`, `DeleteVersion`, `PublishVersion`, `DeprecateVersion`, `CheckSchema`) and the standard packs (`ListStandardPacks`, `InstallStandardPacks`). `CreateVersion` is sent once, never retried.
@@ -34,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/go/v0.2.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/go/v0.3.0...HEAD
+[0.3.0]: https://github.com/jamescarr/santati-sdks/compare/go/v0.2.0...go/v0.3.0
 [0.2.0]: https://github.com/jamescarr/santati-sdks/compare/go/v0.1.0...go/v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/go/v0.1.0

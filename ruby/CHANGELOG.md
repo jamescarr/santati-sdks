@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
 ### Added
 
 - `client.schemas`: event definitions (`list_definitions`, `iterate_definitions`, `get_definition`, `create_definition`, `update_definition`, `delete_definition`), their schema versions (`list_versions`, `iterate_versions`, `get_version`, `create_version`, `update_version` with `if_match:`, `delete_version`, `publish_version`, `deprecate_version`, `check_schema`) and the standard packs (`list_standard_packs`, `install_standard_packs`). `create_version` is sent once, never retried.
@@ -33,6 +35,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/ruby-v0.2.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/ruby-v0.3.0...HEAD
+[0.3.0]: https://github.com/jamescarr/santati-sdks/compare/ruby-v0.2.0...ruby-v0.3.0
 [0.2.0]: https://github.com/jamescarr/santati-sdks/compare/ruby-v0.1.0...ruby-v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/ruby-v0.1.0

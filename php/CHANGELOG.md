@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+
 ### Added
 
 - `$client->schemas`: event definitions (`listDefinitions`, `iterateDefinitions`, `getDefinition`, `createDefinition`, `updateDefinition`, `deleteDefinition`), their schema versions (`listVersions`, `iterateVersions`, `getVersion`, `createVersion`, `updateVersion` with `$ifMatch`, `deleteVersion`, `publishVersion`, `deprecateVersion`, `checkSchema`) and the standard packs (`listStandardPacks`, `installStandardPacks`), with the `DefinitionPage`, `SchemaVersionPage` and `SchemaVersionResult` value objects. `createVersion()` is sent once, never retried.
@@ -34,6 +36,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Emit one audit event or a batch, with generated idempotency keys and retries.
 - List audit events with filters and cursor pagination, and iterate across pages.
 
-[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/php-v0.2.0...HEAD
+[Unreleased]: https://github.com/jamescarr/santati-sdks/compare/php-v0.3.0...HEAD
+[0.3.0]: https://github.com/jamescarr/santati-sdks/compare/php-v0.2.0...php-v0.3.0
 [0.2.0]: https://github.com/jamescarr/santati-sdks/compare/php-v0.1.0...php-v0.2.0
 [0.1.0]: https://github.com/jamescarr/santati-sdks/releases/tag/php-v0.1.0
