@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `santati_event_schema` resource: the current JSON Schema of one event action, kept in sync as numbered schema versions. A changed document publishes a new version (the server deprecates the old one); `publish = false` keeps a draft that is edited in place. Import by `<action>` or `<action>/<version>`.
+
 ## [0.1.0] - 2026-10-08
 
 ### Added

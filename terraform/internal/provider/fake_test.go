@@ -45,11 +45,12 @@ type fakeControlPlane struct {
 	streams      map[int64]*fakeStream
 	nextStreamID int64
 	clock        int
+	definitions  map[string]*fakeDefinition
 }
 
 func newFakeControlPlane(t *testing.T) *fakeControlPlane {
 	t.Helper()
-	f := &fakeControlPlane{t: t, streams: map[int64]*fakeStream{}, nextStreamID: 1}
+	f := &fakeControlPlane{t: t, streams: map[int64]*fakeStream{}, nextStreamID: 1, definitions: map[string]*fakeDefinition{}}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
 	t.Cleanup(f.server.Close)
 	return f
@@ -92,6 +93,18 @@ func (f *fakeControlPlane) count(method, prefix string) int {
 	n := 0
 	for _, r := range f.all() {
 		if r.Method == method && strings.HasPrefix(r.Path, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+// countPath counts the requests with the method whose path and query are
+// exactly path.
+func (f *fakeControlPlane) countPath(method, path string) int {
+	n := 0
+	for _, r := range f.all() {
+		if r.Method == method && r.Path == path {
 			n++
 		}
 	}
@@ -168,6 +181,8 @@ func (f *fakeControlPlane) handle(w http.ResponseWriter, r *http.Request) {
 		f.paged(w, r, organizationsFixture)
 	case path == "/api/v0/event-definitions/":
 		f.paged(w, r, eventDefinitionsFixture)
+	case strings.HasPrefix(path, "/api/v0/event-definitions/"):
+		f.schemaVersions(w, r, body)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]any{"detail": "Not found."})
 	}
@@ -368,4 +383,194 @@ func (f *fakeControlPlane) paged(w http.ResponseWriter, r *http.Request, items [
 		next = fmt.Sprintf("%s%s?cursor=%d", f.server.URL, r.URL.Path, end)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"next": next, "previous": nil, "results": items[start:end]})
+}
+
+// ---- event schema versions -----------------------------------------------
+
+type fakeSchemaVersion struct {
+	version                             int64
+	status                              string // draft | published | deprecated
+	schema                              map[string]any
+	publishedAt, deprecatedAt, deadline *string
+	createdAt, updatedAt                string
+}
+
+// fakeDefinition is an event definition, reduced to what schema versions need.
+type fakeDefinition struct {
+	counter  int64 // the last version number issued; numbers are never reused
+	versions []*fakeSchemaVersion
+}
+
+// addDefinition defines an action in the event catalog.
+func (f *fakeControlPlane) addDefinition(action string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.definitions[action] = &fakeDefinition{}
+}
+
+// publishOutOfBand creates and publishes a version as some other client would,
+// and returns its number.
+func (f *fakeControlPlane) publishOutOfBand(action string, schema map[string]any) int64 {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	def := f.definitions[action]
+	v := f.createVersion(def, schema)
+	f.publishVersion(def, v)
+	return v.version
+}
+
+// editDraft replaces a draft's document as some other client would.
+func (f *fakeControlPlane) editDraft(action string, version int64, schema map[string]any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	v := f.findVersion(f.definitions[action], version)
+	v.schema = schema
+	v.updatedAt = f.tick()
+}
+
+// versionStatus is the status of a version, or "" when it does not exist.
+func (f *fakeControlPlane) versionStatus(action string, version int64) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if v := f.findVersion(f.definitions[action], version); v != nil {
+		return v.status
+	}
+	return ""
+}
+
+func (f *fakeControlPlane) findVersion(def *fakeDefinition, version int64) *fakeSchemaVersion {
+	if def == nil {
+		return nil
+	}
+	for _, v := range def.versions {
+		if v.version == version {
+			return v
+		}
+	}
+	return nil
+}
+
+func (f *fakeControlPlane) createVersion(def *fakeDefinition, schema map[string]any) *fakeSchemaVersion {
+	def.counter++
+	now := f.tick()
+	v := &fakeSchemaVersion{version: def.counter, status: "draft", schema: schema, createdAt: now, updatedAt: now}
+	def.versions = append(def.versions, v)
+	return v
+}
+
+// publishVersion publishes a draft and deprecates every older published
+// version. Publishing a published or deprecated version changes nothing.
+func (f *fakeControlPlane) publishVersion(def *fakeDefinition, v *fakeSchemaVersion) {
+	if v.status != "draft" {
+		return
+	}
+	now := f.tick()
+	v.status, v.publishedAt, v.updatedAt = "published", &now, now
+	for _, older := range def.versions {
+		if older.version < v.version && older.status == "published" {
+			older.status, older.deprecatedAt, older.deadline, older.updatedAt = "deprecated", &now, &now, now
+		}
+	}
+}
+
+func schemaVersionJSON(v *fakeSchemaVersion) map[string]any {
+	return map[string]any{
+		"version":              v.version,
+		"status":               v.status,
+		"schema":               v.schema,
+		"published_at":         v.publishedAt,
+		"deprecated_at":        v.deprecatedAt,
+		"deprecation_deadline": v.deadline,
+		"created_at":           v.createdAt,
+		"updated_at":           v.updatedAt,
+	}
+}
+
+// schemaVersions serves /api/v0/event-definitions/{action}/schema-versions/
+// [{version}/[publish/]].
+func (f *fakeControlPlane) schemaVersions(w http.ResponseWriter, r *http.Request, body map[string]any) {
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/v0/event-definitions/"), "/"), "/")
+	def, ok := f.definitions[parts[0]]
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"detail": "No EventDefinition matches the given query."})
+		return
+	}
+	if len(parts) < 2 || parts[1] != "schema-versions" || len(parts) > 4 {
+		writeJSON(w, http.StatusNotFound, map[string]any{"detail": "Not found."})
+		return
+	}
+
+	if len(parts) == 2 {
+		switch r.Method {
+		case http.MethodGet:
+			items := make([]map[string]any, 0, len(def.versions))
+			for i := len(def.versions) - 1; i >= 0; i-- {
+				items = append(items, schemaVersionJSON(def.versions[i]))
+			}
+			f.paged(w, r, items)
+		case http.MethodPost:
+			schema, ok := body["schema"].(map[string]any)
+			if !ok {
+				writeJSON(w, http.StatusBadRequest, map[string]any{"schema": []string{"The schema must be a JSON object."}})
+				return
+			}
+			writeJSON(w, http.StatusCreated, schemaVersionJSON(f.createVersion(def, schema)))
+		default:
+			writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"detail": "Method not allowed."})
+		}
+		return
+	}
+
+	number, err := strconv.ParseInt(parts[2], 10, 64)
+	var v *fakeSchemaVersion
+	if err == nil {
+		v = f.findVersion(def, number)
+	}
+	if v == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"detail": "No EventSchemaVersion matches the given query."})
+		return
+	}
+
+	if len(parts) == 4 {
+		if parts[3] != "publish" || r.Method != http.MethodPost {
+			writeJSON(w, http.StatusNotFound, map[string]any{"detail": "Not found."})
+			return
+		}
+		f.publishVersion(def, v)
+		writeJSON(w, http.StatusOK, schemaVersionJSON(v))
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, schemaVersionJSON(v))
+	case http.MethodPut:
+		if v.status != "draft" {
+			writeJSON(w, http.StatusConflict, map[string]any{"detail": "Published schema versions cannot be changed. Create a new draft instead."})
+			return
+		}
+		schema, ok := body["schema"].(map[string]any)
+		if !ok {
+			writeJSON(w, http.StatusBadRequest, map[string]any{"schema": []string{"The schema must be a JSON object."}})
+			return
+		}
+		v.schema = schema
+		v.updatedAt = f.tick()
+		writeJSON(w, http.StatusOK, schemaVersionJSON(v))
+	case http.MethodDelete:
+		if v.status != "draft" {
+			writeJSON(w, http.StatusConflict, map[string]any{"detail": "Published schema versions cannot be deleted."})
+			return
+		}
+		kept := def.versions[:0]
+		for _, other := range def.versions {
+			if other != v {
+				kept = append(kept, other)
+			}
+		}
+		def.versions = kept
+		w.WriteHeader(http.StatusNoContent)
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"detail": "Method not allowed."})
+	}
 }

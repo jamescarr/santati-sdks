@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -438,5 +440,72 @@ func TestContextCancelStopsRetries(t *testing.T) {
 	_, err := newTestClient(srv.URL).ListTrails(ctx)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+}
+
+func TestSchemaVersionRequests(t *testing.T) {
+	type request struct{ line, contentType, body string }
+	var (
+		mu       sync.Mutex
+		requests []request
+	)
+	const version = `{"version":2,"status":"draft","schema":{"type":"object"},"published_at":null,"deprecated_at":null,"deprecation_deadline":null,"created_at":"c","updated_at":"u"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		requests = append(requests, request{r.Method + " " + r.RequestURI, r.Header.Get("Content-Type"), string(body)})
+		mu.Unlock()
+		switch {
+		case r.Method == http.MethodDelete:
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && r.RequestURI == "/api/v0/event-definitions/a.b/schema-versions/":
+			_, _ = w.Write([]byte(`{"next":null,"previous":null,"results":[` + version + `]}`))
+		default:
+			_, _ = w.Write([]byte(version))
+		}
+	}))
+	defer srv.Close()
+
+	ctx := context.Background()
+	c := newTestClient(srv.URL)
+	doc := json.RawMessage(`{"type":"object"}`)
+	if _, err := c.CreateSchemaVersion(ctx, "a.b", doc); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetSchemaVersion(ctx, "a.b", 2); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UpdateSchemaVersion(ctx, "a.b", 2, doc); err != nil {
+		t.Fatal(err)
+	}
+	published, err := c.PublishSchemaVersion(ctx, "a.b", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteSchemaVersion(ctx, "a.b", 2); err != nil {
+		t.Fatal(err)
+	}
+	listed, err := c.ListSchemaVersions(ctx, "a.b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const base = "/api/v0/event-definitions/a.b/schema-versions/"
+	want := []request{
+		{"POST " + base, "application/json", `{"schema":{"type":"object"}}`},
+		{"GET " + base + "2/", "", ""},
+		{"PUT " + base + "2/", "application/json", `{"schema":{"type":"object"}}`},
+		{"POST " + base + "2/publish/", "", ""},
+		{"DELETE " + base + "2/", "", ""},
+		{"GET " + base, "", ""},
+	}
+	if !reflect.DeepEqual(requests, want) {
+		t.Fatalf("requests = %+v\nwant     %+v", requests, want)
+	}
+	if published.Version != 2 || published.Status != "draft" || string(published.Schema) != `{"type":"object"}` || published.PublishedAt != nil {
+		t.Fatalf("published = %+v", published)
+	}
+	if len(listed) != 1 || listed[0].Version != 2 {
+		t.Fatalf("listed = %+v", listed)
 	}
 }
