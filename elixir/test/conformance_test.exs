@@ -37,7 +37,8 @@ defmodule Santati.ConformanceTest do
     Santati.ServerError => "ServerError",
     Santati.TransportError => "TransportError",
     Santati.ApiError => "ApiError",
-    Santati.OutboxError => "OutboxError"
+    Santati.OutboxError => "OutboxError",
+    Santati.SchemaValidationError => "SchemaValidationError"
   }
 
   for test_case <- @cases do
@@ -166,8 +167,89 @@ defmodule Santati.ConformanceTest do
     end
   end
 
+  defp invoke(client, input, "list_definitions") do
+    client |> Santati.Schemas.list_definitions(input["params"] || %{}) |> wire()
+  end
+
+  defp invoke(client, input, "iterate_definitions") do
+    stream_wire(fn -> Santati.Schemas.stream_definitions(client, input["params"] || %{}) end)
+  end
+
+  defp invoke(client, input, "get_definition") do
+    client |> Santati.Schemas.get_definition(input["action"]) |> wire()
+  end
+
+  defp invoke(client, input, "create_definition") do
+    client |> Santati.Schemas.create_definition(input["definition"]) |> wire()
+  end
+
+  defp invoke(client, input, "update_definition") do
+    client |> Santati.Schemas.update_definition(input["action"], input["changes"]) |> wire()
+  end
+
+  defp invoke(client, input, "delete_definition") do
+    client |> Santati.Schemas.delete_definition(input["action"]) |> wire()
+  end
+
+  defp invoke(client, input, "list_versions") do
+    client |> Santati.Schemas.list_versions(input["action"], input["params"] || %{}) |> wire()
+  end
+
+  defp invoke(client, input, "iterate_versions") do
+    stream_wire(fn ->
+      Santati.Schemas.stream_versions(client, input["action"], input["params"] || %{})
+    end)
+  end
+
+  defp invoke(client, input, "get_version") do
+    client |> Santati.Schemas.get_version(input["action"], input["version"]) |> wire()
+  end
+
+  defp invoke(client, input, "create_version") do
+    client |> Santati.Schemas.create_version(input["action"], input["schema"]) |> wire()
+  end
+
+  defp invoke(client, input, "update_version") do
+    client
+    |> Santati.Schemas.update_version(input["action"], input["version"], input["schema"],
+      if_match: input["if_match"]
+    )
+    |> wire()
+  end
+
+  defp invoke(client, input, "delete_version") do
+    client |> Santati.Schemas.delete_version(input["action"], input["version"]) |> wire()
+  end
+
+  defp invoke(client, input, "publish_version") do
+    client |> Santati.Schemas.publish_version(input["action"], input["version"]) |> wire()
+  end
+
+  defp invoke(client, input, "deprecate_version") do
+    client |> Santati.Schemas.deprecate_version(input["action"], input["version"]) |> wire()
+  end
+
+  defp invoke(client, input, "check_schema") do
+    client |> Santati.Schemas.check_schema(input["action"], input["schema"]) |> wire()
+  end
+
+  defp invoke(client, _input, "list_standard_packs") do
+    client |> Santati.Schemas.list_standard_packs() |> wire()
+  end
+
+  defp invoke(client, input, "install_standard_packs") do
+    client |> Santati.Schemas.install_standard_packs(input["packs"]) |> wire()
+  end
+
   defp invoke(_client, _input, operation) do
     flunk("unknown conformance operation #{inspect(operation)}")
+  end
+
+  # Drains a lazy stream: an error on a page is raised by the stream itself.
+  defp stream_wire(build) do
+    {:ok, build.() |> Enum.map(&to_wire/1)}
+  rescue
+    error -> {:error, error}
   end
 
   defp pre_send(nil), do: nil
@@ -226,6 +308,7 @@ defmodule Santati.ConformanceTest do
     end
   end
 
+  defp wire(:ok), do: {:ok, nil}
   defp wire({:ok, value}), do: {:ok, to_wire(value)}
   defp wire({:error, error}), do: {:error, error}
 

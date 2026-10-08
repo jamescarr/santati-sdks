@@ -2,10 +2,10 @@ defmodule Santati.SantatiError do
   @moduledoc """
   The shape every error kind of this SDK shares.
 
-  Each of `Santati.ValidationError`, `Santati.AuthError`,
-  `Santati.NotFoundError`, `Santati.RateLimitedError`, `Santati.ServerError`,
-  `Santati.TransportError` and `Santati.ApiError` is its own exception struct
-  with the same five attributes:
+  Each of `Santati.ValidationError`, `Santati.SchemaValidationError`,
+  `Santati.AuthError`, `Santati.NotFoundError`, `Santati.RateLimitedError`,
+  `Santati.ServerError`, `Santati.TransportError` and `Santati.ApiError` is its
+  own exception struct with the same five attributes:
 
     * `status` — the HTTP status, or `nil` when no response was received
     * `code` — the server's machine-readable error code, or `nil`
@@ -40,6 +40,26 @@ defmodule Santati.ValidationError do
                field: nil,
                retry_after: nil,
                message: "validation failed"
+
+  @type t :: %__MODULE__{}
+end
+
+defmodule Santati.SchemaValidationError do
+  @moduledoc """
+  The server rejected the event against the action's JSON Schema, a disallowed
+  target type, or an unusable `schema_version` pin: HTTP `400`, `413` or `422`
+  with the code `schema_validation_failed`.
+
+  An Elixir exception cannot subclass another, so this is a separate struct:
+  code that matches `%Santati.ValidationError{}` does not catch it. It carries
+  the same five attributes.
+  """
+
+  defexception status: nil,
+               code: nil,
+               field: nil,
+               retry_after: nil,
+               message: "schema validation failed"
 
   @type t :: %__MODULE__{}
 end
@@ -148,6 +168,7 @@ defmodule Santati.Errors do
     NotFoundError,
     OutboxError,
     RateLimitedError,
+    SchemaValidationError,
     ServerError,
     TransportError,
     ValidationError
@@ -187,7 +208,13 @@ defmodule Santati.Errors do
   def from_response(%{status: status, headers: headers, body: body}) do
     {code, field, message} = parse_body(body, status)
 
-    struct(kind(status), %{
+    kind =
+      case kind(status) do
+        ValidationError -> validation_kind(code)
+        other -> other
+      end
+
+    struct(kind, %{
       status: status,
       code: code,
       field: field,
@@ -195,6 +222,12 @@ defmodule Santati.Errors do
       message: message
     })
   end
+
+  @doc false
+  # The kind of a 400, 413 or 422 whose body carried `code`.
+  @spec validation_kind(String.t() | nil) :: ValidationError | SchemaValidationError
+  def validation_kind("schema_validation_failed"), do: SchemaValidationError
+  def validation_kind(_code), do: ValidationError
 
   defp kind(status) do
     cond do
@@ -238,11 +271,14 @@ defmodule Santati.Errors do
     end
   end
 
-  defp header(headers, name) when is_list(headers) do
+  @doc false
+  # The value of the first header named `name` (compared case-insensitively), or `nil`.
+  @spec header(Tesla.Env.headers() | term(), String.t()) :: String.t() | nil
+  def header(headers, name) when is_list(headers) do
     Enum.find_value(headers, fn {key, value} ->
       if key |> to_string() |> String.downcase() == name, do: value
     end)
   end
 
-  defp header(_headers, _name), do: nil
+  def header(_headers, _name), do: nil
 end

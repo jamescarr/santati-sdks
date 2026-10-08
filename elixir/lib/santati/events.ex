@@ -44,8 +44,12 @@ defmodule Santati.Events do
 
   The event is a map (atom or string keys) with `event` required and `trail`,
   `organization_id`, `actor`, `targets`, `metadata`, `data`, `context`,
-  `created_at` and `idempotency_key` optional. Absent and `nil` members are
-  never sent. A missing `idempotency_key` gets a freshly generated UUIDv4.
+  `created_at`, `idempotency_key` and `schema_version` optional. Absent and
+  `nil` members are never sent. A missing `idempotency_key` gets a freshly
+  generated UUIDv4. `schema_version` is an integer pinning the event to one
+  published schema version of its action; it is forwarded unchanged and never
+  validated here (the server answers an unusable pin with a
+  `Santati.SchemaValidationError`).
 
   Answers `{:ok, %Santati.EmitResult{}}` with `duplicate: true` when the server
   replayed an earlier request, `{:error, exception}` otherwise.
@@ -155,7 +159,11 @@ defmodule Santati.Events do
         {:ok, %{status: 200, body: body}} ->
           case decode(body, PaginatedAuditEventList) do
             {:ok, %PaginatedAuditEventList{} = page} ->
-              {:ok, %EventPage{results: page.results || [], next_cursor: next_cursor(page.next)}}
+              {:ok,
+               %EventPage{
+                 results: page.results || [],
+                 next_cursor: Client.next_cursor(page.next)
+               }}
 
             _other ->
               {:error, Errors.api(200)}
@@ -233,7 +241,8 @@ defmodule Santati.Events do
           "targets" => targets(Map.get(event, "targets")),
           "metadata" => Map.get(event, "metadata"),
           "data" => Map.get(event, "data"),
-          "context" => Map.get(event, "context")
+          "context" => Map.get(event, "context"),
+          "schema_version" => Map.get(event, "schema_version")
         }
 
         {:ok, drop_nils(members), key}
@@ -335,23 +344,6 @@ defmodule Santati.Events do
   end
 
   defp normalize_key(key), do: key
-
-  defp next_cursor(nil), do: nil
-
-  defp next_cursor(url) when is_binary(url) do
-    case URI.parse(url).query do
-      nil -> nil
-      query -> query |> decode_query() |> Map.get("cursor")
-    end
-  end
-
-  defp next_cursor(_url), do: nil
-
-  defp decode_query(query) do
-    URI.decode_query(query)
-  rescue
-    _error -> %{}
-  end
 
   defp decode(body, module), do: Deserializer.json_decode(body, module)
 

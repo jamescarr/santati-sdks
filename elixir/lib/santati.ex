@@ -13,6 +13,8 @@ defmodule Santati do
       |> Santati.Events.stream(trail: "billing")
       |> Enum.each(&IO.inspect(&1.id))
 
+      {:ok, _definition} = Santati.Schemas.create_definition(client, %{action: "invoice.voided"})
+
       {:ok, _outbox} = Santati.Outbox.start_link(client: client, name: MyApp.Santati)
       {:ok, client} = Santati.new(api_key: System.fetch_env!("SANTATI_API_KEY"), trail: "billing", outbox: MyApp.Santati)
       {:ok, %Santati.EmitResult{queued: true}} = Santati.Events.emit(client, %{event: "invoice.voided"})
