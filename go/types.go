@@ -48,6 +48,11 @@ type EventInput struct {
 	Context        map[string]any    `json:"context,omitempty"`
 	CreatedAt      string            `json:"created_at,omitempty"`
 	IdempotencyKey string            `json:"idempotency_key,omitempty"`
+	// SchemaVersion pins the event to one published schema version of its
+	// action; 0 means no pin. It is forwarded unchanged (as an int32) and never
+	// validated here: the server answers an unusable pin with
+	// KindSchemaValidation.
+	SchemaVersion int `json:"schema_version,omitempty"`
 }
 
 // ListParams filters a list request. Zero-valued fields are omitted, so the
@@ -110,6 +115,87 @@ type BatchResult struct {
 type EventPage struct {
 	Results    []AuditEvent
 	NextCursor *string
+}
+
+// EventDefinition is one action of the team's catalog, re-exported from the
+// generated core.
+type EventDefinition = core.EventDefinition
+
+// EventSchemaVersion is one version of an action's JSON Schema, re-exported
+// from the generated core. Status is "draft", "published" or "deprecated".
+type EventSchemaVersion = core.EventSchemaVersion
+
+// SchemaCheck is the result of a dry run: how many stored events were run,
+// how many the document would reject, and the first failures.
+type SchemaCheck = core.SchemaCheck
+
+// SchemaCheckFailure is one stored event a dry-run document would reject.
+type SchemaCheckFailure = core.SchemaCheckFailure
+
+// StandardEventCatalog lists every standard pack.
+type StandardEventCatalog = core.StandardEventCatalog
+
+// StandardPack is one standard pack and its actions.
+type StandardPack = core.StandardPack
+
+// StandardEvent is one action of a standard pack.
+type StandardEvent = core.StandardEvent
+
+// OcsfMapping is the OCSF class and activity a standard action maps to.
+type OcsfMapping = core.OcsfMapping
+
+// StandardPackInstallResult lists the actions an install defined and the ones
+// the team already had.
+type StandardPackInstallResult = core.StandardPackInstallResult
+
+// PageParams selects a page of definitions or schema versions. Zero-valued
+// fields are omitted. IterateDefinitions and IterateVersions ignore Cursor:
+// iteration starts at the first page.
+type PageParams struct {
+	Limit  int
+	Cursor string
+}
+
+// DefinitionInput is the definition CreateDefinition sends. Action is
+// required; nil Description and IsActive and a nil AllowedTargetTypes are
+// omitted, and a non-nil empty AllowedTargetTypes is sent as [].
+type DefinitionInput struct {
+	Action             string
+	Description        *string
+	AllowedTargetTypes []string
+	IsActive           *bool
+}
+
+// DefinitionUpdate holds the changes UpdateDefinition sends: only the non-nil
+// members, so the zero value sends {}. NewAction renames the action (it is
+// sent as "action"); a non-nil empty AllowedTargetTypes is sent as [].
+type DefinitionUpdate struct {
+	NewAction          *string
+	Description        *string
+	AllowedTargetTypes []string
+	IsActive           *bool
+}
+
+// DefinitionPage is one page of event definitions. NextCursor is the decoded
+// cursor of the next page, or nil on the last page.
+type DefinitionPage struct {
+	Results    []EventDefinition
+	NextCursor *string
+}
+
+// SchemaVersionPage is one page of an action's schema versions. NextCursor is
+// the decoded cursor of the next page, or nil on the last page.
+type SchemaVersionPage struct {
+	Results    []EventSchemaVersion
+	NextCursor *string
+}
+
+// SchemaVersionResult is a schema version and the ETag header the response
+// carried ("" when there was none), to pass back as the ifMatch of
+// UpdateVersion.
+type SchemaVersionResult struct {
+	SchemaVersion *EventSchemaVersion
+	ETag          string
 }
 
 // OutboxEntry is one claimed outbox event. ID identifies it to Ack and

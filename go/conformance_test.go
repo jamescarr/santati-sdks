@@ -163,7 +163,11 @@ func runCase(t *testing.T, testCase testCase) {
 	case "emit_outbox":
 		actual, err = runEmitOutbox(ctx, client, decodeEvents(input.Events), outcomes)
 	default:
-		t.Fatalf("unknown operation %q", testCase.Operation)
+		var handled bool
+		actual, handled, err = runSchemaOperation(ctx, client, testCase.Operation, testCase.Input)
+		if !handled {
+			t.Fatalf("unknown operation %q", testCase.Operation)
+		}
 	}
 	finish(t, expect, actual, err, gateway, bindings)
 }
@@ -524,6 +528,7 @@ type wireEvent struct {
 	Context        map[string]any    `json:"context"`
 	CreatedAt      string            `json:"created_at"`
 	IdempotencyKey string            `json:"idempotency_key"`
+	SchemaVersion  int               `json:"schema_version"`
 }
 
 func decodeEvent(raw json.RawMessage) santati.EventInput {
@@ -540,6 +545,7 @@ func decodeEvent(raw json.RawMessage) santati.EventInput {
 		Context:        wire.Context,
 		CreatedAt:      wire.CreatedAt,
 		IdempotencyKey: wire.IdempotencyKey,
+		SchemaVersion:  wire.SchemaVersion,
 	}
 	if wire.Actor != nil {
 		input.Actor = &santati.ActorInput{
@@ -758,13 +764,7 @@ func batchValue(result *santati.BatchResult) any {
 }
 
 func pageValue(page *santati.EventPage) any {
-	value := map[string]any{"results": page.Results}
-	if page.NextCursor != nil {
-		value["next_cursor"] = *page.NextCursor
-	} else {
-		value["next_cursor"] = nil
-	}
-	return value
+	return cursorPageValue(page.Results, page.NextCursor)
 }
 
 // ---- matching ------------------------------------------------------------

@@ -1,8 +1,9 @@
 // Package santati is the official Go SDK for the Santati audit-log API.
 //
-// A client talks to the control plane with a team API key and exposes one
-// resource, Events, that emits single events or batches and lists or streams
-// the audit events they produced:
+// A client talks to the control plane with a team API key and exposes two
+// resources: Events, which emits single events or batches and lists or streams
+// the audit events they produced, and Schemas, which manages event
+// definitions, their JSON Schema versions and the standard packs:
 //
 //	client, err := santati.NewClient(os.Getenv("SANTATI_API_KEY"),
 //		santati.WithTrail("billing"),
@@ -32,6 +33,7 @@
 //	err = client.Close(ctx)
 //
 // Errors from the API are always a *Error, whose Kind tells the caller which
-// failure it was (validation, auth, not found, rate limited, server,
-// transport or any other API error), or a KindOutbox error from the outbox.
+// failure it was (validation, schema validation, auth, not found, rate
+// limited, server, transport or any other API error), or a KindOutbox error
+// from the outbox.
 package santati

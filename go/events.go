@@ -184,6 +184,10 @@ func (c *Client) envelope(input EventInput, eventField, trailField string) (*cor
 	if input.Context != nil {
 		envelope.Context = input.Context
 	}
+	if input.SchemaVersion != 0 {
+		version := int32(input.SchemaVersion)
+		envelope.SchemaVersion = &version
+	}
 	return envelope, key, nil
 }
 
@@ -325,15 +329,20 @@ func toBatchResult(result *core.EventBatchResult) *BatchResult {
 }
 
 func toEventPage(page *core.PaginatedAuditEventList) *EventPage {
-	out := &EventPage{Results: page.Results}
-	if next := page.Next.Get(); next != nil {
-		if parsed, err := url.Parse(*next); err == nil {
+	return &EventPage{Results: page.Results, NextCursor: cursorFromNext(page.Next)}
+}
+
+// cursorFromNext is the decoded cursor query parameter of a page's next URL,
+// or nil when the page has no next URL or it carries no cursor.
+func cursorFromNext(next core.NullableString) *string {
+	if nextURL := next.Get(); nextURL != nil {
+		if parsed, err := url.Parse(*nextURL); err == nil {
 			if cursor := parsed.Query().Get("cursor"); cursor != "" {
-				out.NextCursor = &cursor
+				return &cursor
 			}
 		}
 	}
-	return out
+	return nil
 }
 
 func (c *Client) httpError(resp *http.Response) *Error {
@@ -342,14 +351,26 @@ func (c *Client) httpError(resp *http.Response) *Error {
 		body, _ = io.ReadAll(resp.Body)
 	}
 	code, field, message := parseErrorBody(body, resp.StatusCode)
+	kind := kindForStatus(resp.StatusCode)
+	if kind == KindValidation {
+		kind = validationKind(code)
+	}
 	return &Error{
-		Kind:       kindForStatus(resp.StatusCode),
+		Kind:       kind,
 		Status:     resp.StatusCode,
 		Code:       code,
 		Field:      field,
 		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
 		Message:    message,
 	}
+}
+
+// validationKind is the kind of a 400, 413 or 422 whose body carried code.
+func validationKind(code string) Kind {
+	if code == "schema_validation_failed" {
+		return KindSchemaValidation
+	}
+	return KindValidation
 }
 
 func kindForStatus(status int) Kind {

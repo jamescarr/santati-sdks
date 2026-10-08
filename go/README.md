@@ -70,6 +70,23 @@ func main() {
 		}
 		fmt.Println(event.Id)
 	}
+
+	// Pin an emit to one published schema version of its action.
+	if _, err := client.Events.Emit(ctx, santati.EventInput{Event: "invoice.voided", SchemaVersion: 2}); err != nil {
+		log.Fatal(err)
+	}
+
+	// Manage event definitions and their JSON Schema versions.
+	if _, err := client.Schemas.CreateDefinition(ctx, santati.DefinitionInput{Action: "invoice.voided"}); err != nil {
+		log.Fatal(err)
+	}
+	draft, err := client.Schemas.CreateVersion(ctx, "invoice.voided", map[string]any{"type": "object"})
+	if err != nil {
+		log.Fatal(err)
+	}
+	if _, err := client.Schemas.PublishVersion(ctx, "invoice.voided", int(draft.SchemaVersion.Version)); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 
@@ -110,5 +127,10 @@ client, _ := santati.NewClient(key, santati.WithTrail("billing"),
 
 `NewClient` returns a `*santati.Error` for an empty API key or an
 `Authorization` header passed through `WithHeader`. Every failure from the API
-is a `*santati.Error` whose `Kind` is one of `KindValidation`, `KindAuth`,
-`KindNotFound`, `KindRateLimited`, `KindServer`, `KindTransport` or `KindAPI`.
+is a `*santati.Error` whose `Kind` is one of `KindValidation`,
+`KindSchemaValidation`, `KindAuth`, `KindNotFound`, `KindRateLimited`,
+`KindServer`, `KindTransport` or `KindAPI`. `KindSchemaValidation` is a 400,
+413 or 422 whose code is `schema_validation_failed`: the event broke the
+action's schema, named a disallowed target type, or pinned an unusable
+`SchemaVersion`; it is a separate kind, so code matching `KindValidation` must
+match it too.

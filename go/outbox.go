@@ -330,6 +330,7 @@ func outcomeFor(item BatchItem, status int) SendOutcome {
 	if item.Status == string(SendRejected) {
 		outcome := SendOutcome{Status: SendRejected, Err: &Error{Kind: KindValidation, Status: status}}
 		if item.Error != nil {
+			outcome.Err.Kind = validationKind(item.Error.Code)
 			outcome.Err.Code = item.Error.Code
 			outcome.Err.Field = item.Error.Field
 			outcome.Err.Message = item.Error.Message
