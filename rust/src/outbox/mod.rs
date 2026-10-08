@@ -15,7 +15,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::client::Santati;
-use crate::error::Error;
+use crate::error::{validation_kind, Error};
 use crate::types::{BatchStatus, EventInput};
 
 #[cfg(feature = "redis")]
@@ -474,13 +474,16 @@ async fn pass(client: &Santati, state: &Arc<OutboxState>) -> Result<(), Error> {
                                 SendOutcome {
                                     status: SendStatus::Rejected,
                                     id: None,
-                                    error: Some(Error::Validation(crate::ErrorDetails {
-                                        status: Some(http_status),
-                                        code: Some(rejection.code),
-                                        field: rejection.field,
-                                        retry_after: None,
-                                        message: rejection.message,
-                                    })),
+                                    error: Some(Error::from_parts(
+                                        validation_kind(Some(rejection.code.as_str())),
+                                        crate::ErrorDetails {
+                                            status: Some(http_status),
+                                            code: Some(rejection.code),
+                                            field: rejection.field,
+                                            retry_after: None,
+                                            message: rejection.message,
+                                        },
+                                    )),
                                 }
                             }
                         };

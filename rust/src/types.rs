@@ -1,7 +1,8 @@
 //! The facade's input and result types.
 //!
-//! `AuditEvent`, `EventActor` and `EventTarget` are the generated read models,
-//! re-exported from the crate root; everything here is hand-written.
+//! The generated read models (`AuditEvent`, `EventActor`, `EventTarget`,
+//! `EventDefinition`, `EventSchemaVersion`, …) are re-exported from the crate
+//! root; everything here is hand-written.
 
 use std::collections::HashMap;
 
@@ -76,6 +77,11 @@ pub struct EventInput {
     /// Extra producer context, stored verbatim.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub context: Option<serde_json::Map<String, serde_json::Value>>,
+    /// Pins the event to one published schema version of its action; forwarded
+    /// unchanged and never validated here. Absent means the newest published,
+    /// not deprecated, version.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<i32>,
 }
 
 impl EventInput {
@@ -208,4 +214,71 @@ pub struct EventPage {
     pub results: Vec<crate::AuditEvent>,
     /// The cursor to pass to the next `list` call, or `None` on the last page.
     pub next_cursor: Option<String>,
+}
+
+/// The page selectors of [`crate::Schemas::list_definitions`] and
+/// [`crate::Schemas::list_versions`]; absent members are not sent. The
+/// `iterate_*` methods manage the cursor themselves and ignore `cursor`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PageParams {
+    /// Page size.
+    pub limit: Option<u32>,
+    /// Opaque cursor from a previous page.
+    pub cursor: Option<String>,
+}
+
+/// The definition [`crate::Schemas::create_definition`] sends: `action` plus
+/// the members that are `Some`. `Some(vec![])` for `allowed_target_types` is
+/// sent as `[]`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DefinitionInput {
+    /// The action name, e.g. `invoice.voided`.
+    pub action: String,
+    /// What the action means.
+    pub description: Option<String>,
+    /// Target types an event with this action may name; empty means any.
+    pub allowed_target_types: Option<Vec<String>>,
+    /// Whether the action is in force.
+    pub is_active: Option<bool>,
+}
+
+/// The changes [`crate::Schemas::update_definition`] sends: only the members
+/// that are `Some`, so the default sends `{}`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DefinitionUpdate {
+    /// Renames the action (sent as `action`); its schema versions go with it.
+    pub new_action: Option<String>,
+    /// What the action means.
+    pub description: Option<String>,
+    /// Target types an event with this action may name; empty means any.
+    pub allowed_target_types: Option<Vec<String>>,
+    /// Whether the action is in force.
+    pub is_active: Option<bool>,
+}
+
+/// One page of [`crate::Schemas::list_definitions`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct DefinitionPage {
+    /// The definitions on this page.
+    pub results: Vec<crate::EventDefinition>,
+    /// The cursor to pass to the next call, or `None` on the last page.
+    pub next_cursor: Option<String>,
+}
+
+/// One page of [`crate::Schemas::list_versions`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct SchemaVersionPage {
+    /// The schema versions on this page, newest first.
+    pub results: Vec<crate::EventSchemaVersion>,
+    /// The cursor to pass to the next call, or `None` on the last page.
+    pub next_cursor: Option<String>,
+}
+
+/// A schema version and the `ETag` header its response carried.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SchemaVersionResult {
+    /// The schema version.
+    pub schema_version: crate::EventSchemaVersion,
+    /// The response's `ETag`, verbatim, to pass back as `if_match`.
+    pub etag: Option<String>,
 }

@@ -58,13 +58,16 @@
 //! ```
 //!
 //! The surface this implements, and its error kinds and retry policy, are
-//! documented in `docs/sdk-surface.md`.
+//! documented in `docs/sdk-surface.md`. Event definitions, their JSON Schema
+//! versions and the standard packs are managed through [`Santati::schemas`].
 
 mod client;
 mod error;
 mod events;
+mod http;
 mod outbox;
 mod retry;
+mod schemas;
 mod types;
 
 #[path = "generated/models/mod.rs"]
@@ -80,11 +83,17 @@ pub use client::{
 pub use error::{Error, ErrorDetails, ErrorKind};
 pub use events::Events;
 pub use futures_util::StreamExt;
-pub use models::{AuditEvent, EventActor, EventTarget};
+pub use models::{
+    AuditEvent, EventActor, EventDefinition, EventSchemaVersion, EventTarget, OcsfMapping,
+    SchemaCheck, SchemaCheckFailure, StandardEvent, StandardEventCatalog, StandardPack,
+    StandardPackInstallResult,
+};
 #[cfg(feature = "redis")]
 pub use outbox::redis::RedisOutbox;
 pub use outbox::{MemoryOutbox, OutboxEntry, OutboxStore, SendOutcome, SendStatus};
+pub use schemas::Schemas;
 pub use types::{
-    ActorInput, BatchItem, BatchItemError, BatchResult, BatchStatus, EmitResult, EventInput,
-    EventPage, ListParams, TargetInput,
+    ActorInput, BatchItem, BatchItemError, BatchResult, BatchStatus, DefinitionInput,
+    DefinitionPage, DefinitionUpdate, EmitResult, EventInput, EventPage, ListParams, PageParams,
+    SchemaVersionPage, SchemaVersionResult, TargetInput,
 };

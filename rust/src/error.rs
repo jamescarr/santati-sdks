@@ -1,15 +1,19 @@
-//! The SDK's error type: one enum with eight kinds, each carrying the same
+//! The SDK's error type: one enum with nine kinds, each carrying the same
 //! details.
 
 use std::fmt;
 
 use reqwest::header::HeaderMap;
 
-/// Which of the eight failure kinds an [`Error`] is.
+/// Which of the nine failure kinds an [`Error`] is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorKind {
-    /// Local validation, or an HTTP 400, 413 or 422.
+    /// Local validation, or an HTTP 400, 413 or 422 (any code but `schema_validation_failed`).
     Validation,
+    /// HTTP 400, 413 or 422 whose code is `schema_validation_failed`: the event
+    /// broke the action's JSON Schema, named a disallowed target type, or
+    /// pinned an unusable `schema_version`.
+    SchemaValidation,
     /// HTTP 401 or 403.
     Auth,
     /// HTTP 404.
@@ -31,6 +35,7 @@ impl ErrorKind {
     pub fn as_str(self) -> &'static str {
         match self {
             ErrorKind::Validation => "ValidationError",
+            ErrorKind::SchemaValidation => "SchemaValidationError",
             ErrorKind::Auth => "AuthError",
             ErrorKind::NotFound => "NotFoundError",
             ErrorKind::RateLimited => "RateLimitedError",
@@ -66,8 +71,12 @@ pub struct ErrorDetails {
 /// Every failure the SDK reports, and its [`ErrorDetails`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Local validation, or an HTTP 400, 413 or 422.
+    /// Local validation, or an HTTP 400, 413 or 422 (any code but `schema_validation_failed`).
     Validation(ErrorDetails),
+    /// HTTP 400, 413 or 422 whose code is `schema_validation_failed`: the event
+    /// broke the action's JSON Schema, named a disallowed target type, or
+    /// pinned an unusable `schema_version`.
+    SchemaValidation(ErrorDetails),
     /// HTTP 401 or 403.
     Auth(ErrorDetails),
     /// HTTP 404.
@@ -89,6 +98,7 @@ impl Error {
     pub fn details(&self) -> &ErrorDetails {
         match self {
             Error::Validation(details)
+            | Error::SchemaValidation(details)
             | Error::Auth(details)
             | Error::NotFound(details)
             | Error::RateLimited(details)
@@ -99,10 +109,11 @@ impl Error {
         }
     }
 
-    /// Which of the eight kinds this error is.
+    /// Which of the nine kinds this error is.
     pub fn kind(&self) -> ErrorKind {
         match self {
             Error::Validation(_) => ErrorKind::Validation,
+            Error::SchemaValidation(_) => ErrorKind::SchemaValidation,
             Error::Auth(_) => ErrorKind::Auth,
             Error::NotFound(_) => ErrorKind::NotFound,
             Error::RateLimited(_) => ErrorKind::RateLimited,
@@ -141,6 +152,7 @@ impl Error {
     pub(crate) fn from_parts(kind: ErrorKind, details: ErrorDetails) -> Error {
         match kind {
             ErrorKind::Validation => Error::Validation(details),
+            ErrorKind::SchemaValidation => Error::SchemaValidation(details),
             ErrorKind::Auth => Error::Auth(details),
             ErrorKind::NotFound => Error::NotFound(details),
             ErrorKind::RateLimited => Error::RateLimited(details),
@@ -235,7 +247,7 @@ impl Error {
         }
 
         let kind = match status {
-            400 | 413 | 422 => ErrorKind::Validation,
+            400 | 413 | 422 => validation_kind(details.code.as_deref()),
             401 | 403 => ErrorKind::Auth,
             404 => ErrorKind::NotFound,
             429 => ErrorKind::RateLimited,
@@ -243,6 +255,15 @@ impl Error {
             _ => ErrorKind::Api,
         };
         Error::from_parts(kind, details)
+    }
+}
+
+/// The kind of a 400, 413 or 422 whose body carried `code`.
+pub(crate) fn validation_kind(code: Option<&str>) -> ErrorKind {
+    if code == Some("schema_validation_failed") {
+        ErrorKind::SchemaValidation
+    } else {
+        ErrorKind::Validation
     }
 }
 

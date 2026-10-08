@@ -8,6 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `Santati::schemas()`: event definitions (`list_definitions`, `iterate_definitions`, `get_definition`, `create_definition`, `update_definition`, `delete_definition`), their schema versions (`list_versions`, `iterate_versions`, `get_version`, `create_version`, `update_version` with `if_match`, `delete_version`, `publish_version`, `deprecate_version`, `check_schema`) and the standard packs (`list_standard_packs`, `install_standard_packs`). `create_version` is sent once, never retried.
+- `EventInput::schema_version` on `Events::emit`, `emit_batch` items and queued events, to pin an emit to one published version of the action's schema.
+- `ErrorKind::SchemaValidation` and `Error::SchemaValidation`.
+
+### Changed
+
+- A 400, 413 or 422 whose code is `schema_validation_failed` (and a rejected outbox item with that code) is now `Error::SchemaValidation` instead of `Error::Validation`; callers that match only `Validation` must match the new kind too, and `ErrorKind`/`Error` (which are not `#[non_exhaustive]`) gain a variant, so exhaustive matches need a new arm.
+- `EventInput` gains the public field `schema_version`; code that builds it with struct literals needs `..Default::default()`.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

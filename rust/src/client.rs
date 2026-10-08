@@ -11,6 +11,7 @@ use crate::error::Error;
 use crate::events::Events;
 use crate::outbox::{self, OutboxConfig, OutboxState, OutboxStore, SendOutcome, WorkerGuard};
 use crate::retry::RetryPolicy;
+use crate::schemas::Schemas;
 use crate::types::EventInput;
 
 /// The API origin used when `base_url` is not set.
@@ -52,6 +53,12 @@ impl Santati {
     /// The event operations.
     pub fn events(&self) -> Events<'_> {
         Events::new(self)
+    }
+
+    /// The schema operations: event definitions, schema versions and the
+    /// standard packs.
+    pub fn schemas(&self) -> Schemas<'_> {
+        Schemas::new(self)
     }
 
     /// Run one outbox pass now: claim, send and acknowledge batches until the
