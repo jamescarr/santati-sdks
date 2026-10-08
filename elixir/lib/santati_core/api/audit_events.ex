@@ -62,7 +62,7 @@ defmodule SantatiCore.Api.AuditEvents do
   - `connection` (SantatiCore.Connection): Connection to server
   - `opts` (keyword): Optional parameters
     - `:actor_id` (String.t): Exact context.actor.id.
-    - `:actor_type` (String.t): One of: user, system, anonymous.
+    - `:actor_type` (String.t): One of: user, system, agent, anonymous.
     - `:created_after` (String.t): RFC 3339 instant or date, inclusive, on the producer's timestamp.
     - `:created_before` (String.t): Same parsing, inclusive.
     - `:cursor` (String.t): Opaque cursor from the previous page.

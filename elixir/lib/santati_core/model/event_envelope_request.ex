@@ -17,7 +17,8 @@ defmodule SantatiCore.Model.EventEnvelopeRequest do
     :targets,
     :metadata,
     :data,
-    :context
+    :context,
+    :schema_version
   ]
 
   @type t :: %__MODULE__{
@@ -30,7 +31,8 @@ defmodule SantatiCore.Model.EventEnvelopeRequest do
     :targets => [SantatiCore.Model.EventTargetRequest.t] | nil,
     :metadata => %{optional(String.t) => String.t} | nil,
     :data => any() | nil,
-    :context => %{optional(String.t) => any()} | nil
+    :context => %{optional(String.t) => any()} | nil,
+    :schema_version => integer() | nil
   }
 
   alias SantatiCore.Deserializer

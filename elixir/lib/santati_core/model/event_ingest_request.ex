@@ -18,6 +18,7 @@ defmodule SantatiCore.Model.EventIngestRequest do
     :metadata,
     :data,
     :context,
+    :schema_version,
     :events
   ]
 
@@ -32,6 +33,7 @@ defmodule SantatiCore.Model.EventIngestRequest do
     :metadata => %{optional(String.t) => String.t} | nil,
     :data => any() | nil,
     :context => %{optional(String.t) => map()} | nil,
+    :schema_version => integer() | nil,
     :events => [SantatiCore.Model.EventEnvelopeRequest.t]
   }
 

@@ -1,6 +1,12 @@
 {
   "image": "openapitools/openapi-generator-cli:v7.25.0",
-  "operations": ["events_create", "events_list"],
+  "operations": [
+    "events_create", "events_list",
+    "event_definitions_list", "event_definitions_create", "event_definitions_retrieve", "event_definitions_update", "event_definitions_destroy",
+    "schema_versions_list", "schema_versions_create", "schema_versions_retrieve", "schema_versions_update", "schema_versions_destroy",
+    "schema_versions_deprecate", "schema_versions_publish", "schema_versions_check",
+    "standard_events_list", "standard_events_install"
+  ],
   "cores": {
     "python": {"generator": "python",
       "properties": {"packageName": "santati_core", "library": "urllib3", "generateSourceCodeOnly": "true"},
