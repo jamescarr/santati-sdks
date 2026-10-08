@@ -8,6 +8,7 @@ use Santati\Events;
 use Santati\Exception\OutboxException;
 use Santati\Exception\RateLimitedException;
 use Santati\Exception\SantatiException;
+use Santati\Exception\SchemaValidationException;
 use Santati\Exception\ServerException;
 use Santati\Exception\TransportException;
 use Santati\Exception\ValidationException;
@@ -211,8 +212,11 @@ final class Outbox
     {
         if ($item->status === 'rejected') {
             $error = $item->error;
+            $exception = $error?->code === 'schema_validation_failed'
+                ? SchemaValidationException::class
+                : ValidationException::class;
 
-            return new SendOutcome('rejected', null, new ValidationException(
+            return new SendOutcome('rejected', null, new $exception(
                 $error?->message ?? 'rejected',
                 $status,
                 $error?->code,

@@ -48,16 +48,36 @@ foreach ($page->results as $event) {
 foreach ($client->events->iterate(['trail' => 'billing', 'limit' => 200]) as $event) {
     printf("%s %s\n", $event->getCreatedAt(), $event->getEvent());
 }
+
+// Pin an emit to one published schema version of its action.
+$client->events->emit(['event' => 'invoice.voided', 'schema_version' => 2]);
+
+// Manage event definitions and their JSON Schema versions.
+$client->schemas->createDefinition(['action' => 'invoice.voided', 'allowed_target_types' => ['invoice']]);
+$draft = $client->schemas->createVersion('invoice.voided', ['type' => 'object']);
+$client->schemas->updateVersion('invoice.voided', $draft->schemaVersion->getVersion(), ['type' => 'object'], $draft->etag);
+$client->schemas->publishVersion('invoice.voided', $draft->schemaVersion->getVersion());
+```
+
+PHP cannot tell an empty JSON object from an empty array: an empty object nested
+inside a schema document must be passed as `\stdClass`. `createVersion()` is
+sent once, because a repeat would create a second draft.
+
+```php
 ```
 
 ## Errors
 
 Every failure is a `Santati\Exception\SantatiException` with `getStatus()`,
 `getErrorCode()`, `getField()` and `getRetryAfter()`: `ValidationException`
-(local validation, or HTTP 400/413/422), `AuthException` (401/403),
-`NotFoundException` (404), `RateLimitedException` (429), `ServerException`
-(5xx), `TransportException` (no response: refused, DNS, TLS, timeout) and
-`ApiException` (anything else, including an undecodable 2xx body).
+(local validation, or HTTP 400/413/422), `SchemaValidationException` (a
+`ValidationException` for an HTTP 400/413/422 whose code is
+`schema_validation_failed`: the event broke the action's schema, named a
+disallowed target type, or pinned an unusable `schema_version`),
+`AuthException` (401/403), `NotFoundException` (404), `RateLimitedException`
+(429), `ServerException` (5xx), `TransportException` (no response: refused,
+DNS, TLS, timeout) and `ApiException` (anything else, including an
+undecodable 2xx body).
 
 ```php
 use Santati\Exception\RateLimitedException;
@@ -94,10 +114,13 @@ The read models themselves come from the generated core:
 `Santati\Core\Model\AuditEvent`, `…\EventActor` and `…\EventTarget` have a
 getter per wire field (`getId()`, `getEvent()`, `getCreatedAt()`,
 `getSchemaVersion()`, …). `EmitResult`, `BatchResult`, `BatchItem`,
-`BatchItemError` and `EventPage` are the facade's own value objects.
+`BatchItemError`, `EventPage`, `DefinitionPage`, `SchemaVersionPage` and
+`SchemaVersionResult` are the facade's own value objects.
 
 Emit and batch inputs are plain arrays with the wire's `snake_case` keys; every
-absent or `null` member is omitted from the request. `list()` and `iterate()`
+absent or `null` member is omitted from the request. `schema_version` is an
+integer (a non-integer raises a `ValidationException`) that pins the event to
+one published schema version of its action. `list()` and `iterate()`
 accept the audit-event filters (`trail`, `event`, `event_prefix`,
 `organization_id`, `actor_id`, `actor_type`, `target_type`, `target_id`,
 `created_after`, `created_before`, `q`, `sort`, `limit`, `cursor`) as
