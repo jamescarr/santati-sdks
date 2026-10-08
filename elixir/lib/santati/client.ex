@@ -70,6 +70,9 @@ defmodule Santati.Client do
   end
 
   @doc false
+  # Options: `:query`, `:body`, `:headers` (a list of `{name, value}` sent with
+  # this request) and `:retries` (default `true`; `false` makes exactly one
+  # attempt, still mapping a non-2xx answer to its error kind).
   @spec request(t(), atom(), String.t(), keyword()) ::
           {:ok, %{status: non_neg_integer(), headers: Tesla.Env.headers(), body: term()}}
           | {:error, Exception.t()}
@@ -78,10 +81,11 @@ defmodule Santati.Client do
       method: method,
       url: path,
       query: Keyword.get(options, :query, []),
-      body: Keyword.get(options, :body)
+      body: Keyword.get(options, :body),
+      headers: Keyword.get(options, :headers, [])
     ]
 
-    Santati.Retry.run(client, fn ->
+    attempt = fn ->
       case SantatiCore.Connection.request(client.http, request) do
         {:ok, %Tesla.Env{status: status, headers: headers, body: body}} ->
           {:ok, %{status: status, headers: headers, body: body}}
@@ -94,7 +98,31 @@ defmodule Santati.Client do
         {:error, reason} ->
           {:error, Errors.transport(reason)}
       end
-    end)
+    end
+
+    # With `retries: false` the loop runs with a budget of zero: one attempt.
+    budget = if Keyword.get(options, :retries, true), do: client, else: %{client | max_retries: 0}
+    Santati.Retry.run(budget, attempt)
+  end
+
+  @doc false
+  # The decoded `cursor` of a page's `next` URL, or `nil` when it has none.
+  @spec next_cursor(term()) :: String.t() | nil
+  def next_cursor(nil), do: nil
+
+  def next_cursor(url) when is_binary(url) do
+    case URI.parse(url).query do
+      nil -> nil
+      query -> query |> decode_query() |> Map.get("cursor")
+    end
+  end
+
+  def next_cursor(_url), do: nil
+
+  defp decode_query(query) do
+    URI.decode_query(query)
+  rescue
+    _error -> %{}
   end
 
   defp validate_api_key(api_key) when is_binary(api_key) and api_key != "", do: :ok

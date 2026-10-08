@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `client.Schemas`: event definitions (`ListDefinitions`, `IterateDefinitions`, `GetDefinition`, `CreateDefinition`, `UpdateDefinition`, `DeleteDefinition`), their schema versions (`ListVersions`, `IterateVersions`, `GetVersion`, `CreateVersion`, `UpdateVersion` with `ifMatch`, `DeleteVersion`, `PublishVersion`, `DeprecateVersion`, `CheckSchema`) and the standard packs (`ListStandardPacks`, `InstallStandardPacks`). `CreateVersion` is sent once, never retried.
+- `EventInput.SchemaVersion` (0 = no pin) on `Events.Emit`, `EmitBatch` items and queued events, to pin an emit to one published version of the action's schema.
+- `KindSchemaValidation` (`"SchemaValidationError"`).
+
+### Changed
+
+- A 400, 413 or 422 whose code is `schema_validation_failed` (and a rejected outbox item with that code) now has `Kind` `KindSchemaValidation` instead of `KindValidation`; callers that match only `KindValidation` must match the new kind too.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Santati
-  version: 0.2.1
+  version: 0.3.0
   description: 'Santati''s HTTP API. Operations under `/api/v0/` take a team API key
     in `Authorization: Api-Key <key>`; a missing, invalid or under-scoped key is answered
     with `403`, never `401`. Errors on `/api/v0/` use one of three bodies: `ErrorDetail`
@@ -76,6 +76,1669 @@ paths:
                     detail: Invalid cursor
                   summary: Invalid cursor
           description: The cursor is not one this endpoint issued.
+    post:
+      operationId: event_definitions_create
+      description: 'Add an action to the catalog. Requires the ``manage`` scope on
+        a key that is not limited to named trails. Defining the first action turns
+        catalog enforcement on: events with any other action name are refused from
+        then on. Add schemas with ``schema_versions_create``.'
+      summary: Define an action
+      tags:
+      - event-definitions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventDefinitionWriteRequest'
+            examples:
+              DefineAnAction:
+                value:
+                  action: invoice.voided
+                  description: An issued invoice was voided before payment.
+                  allowed_target_types:
+                  - invoice
+                  is_active: true
+                summary: Define an action
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EventDefinitionWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EventDefinitionWriteRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDefinition'
+              examples:
+                InvoiceVoidedDefinition:
+                  value:
+                    action: invoice.voided
+                    description: An issued invoice was voided before payment.
+                    allowed_target_types:
+                    - invoice
+                    is_active: true
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:03:11.482000Z'
+                  summary: Invoice voided definition
+          description: The action as stored.
+        '400':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/FieldErrors'
+                - $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                ActionAlreadyDefined:
+                  value:
+                    action:
+                    - That action is already defined.
+                  summary: Action already defined
+                MalformedJSON:
+                  value:
+                    detail: 'JSON parse error - Expecting value: line 1 column 1 (char
+                      0)'
+                  summary: Malformed JSON
+          description: 'The definition was refused: the action is malformed, reserved
+            or already defined, a target type is malformed, or the body is not JSON.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+  /api/v0/event-definitions/{action}/:
+    get:
+      operationId: event_definitions_retrieve
+      description: One action of this team's catalog. Needs a team API key with any
+        scope.
+      summary: Retrieve an event definition
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDefinition'
+              examples:
+                InvoiceVoidedDefinition:
+                  value:
+                    action: invoice.voided
+                    description: An issued invoice was voided before payment.
+                    allowed_target_types:
+                    - invoice
+                    is_active: true
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:03:11.482000Z'
+                  summary: Invoice voided definition
+          description: The definition.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Not found
+          description: No EventDefinition has that id, or it belongs to another team.
+    patch:
+      operationId: event_definitions_update
+      description: Change any of an action's fields; omitted fields keep their value.
+        Sending a new ``action`` renames it, and its schema versions go with it. Events
+        already stored keep the name they were written with. Requires the ``manage``
+        scope on a key that is not limited to named trails.
+      summary: Update or rename an event definition
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      tags:
+      - event-definitions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEventDefinitionWriteRequest'
+            examples:
+              RenameAnAction:
+                value:
+                  action: invoice.cancelled
+                summary: Rename an action
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEventDefinitionWriteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEventDefinitionWriteRequest'
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventDefinition'
+              examples:
+                InvoiceVoidedDefinition:
+                  value:
+                    action: invoice.voided
+                    description: An issued invoice was voided before payment.
+                    allowed_target_types:
+                    - invoice
+                    is_active: true
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:03:11.482000Z'
+                  summary: Invoice voided definition
+          description: The definition as it now stands.
+        '400':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/FieldErrors'
+                - $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                ActionAlreadyDefined:
+                  value:
+                    action:
+                    - That action is already defined.
+                  summary: Action already defined
+                MalformedJSON:
+                  value:
+                    detail: 'JSON parse error - Expecting value: line 1 column 1 (char
+                      0)'
+                  summary: Malformed JSON
+          description: 'The definition was refused: the action is malformed, reserved
+            or already defined, a target type is malformed, or the body is not JSON.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Not found
+          description: No EventDefinition has that id, or it belongs to another team.
+    delete:
+      operationId: event_definitions_destroy
+      description: Delete an action and all of its schema versions, published ones
+        included. Requires the ``manage`` scope on a key that is not limited to named
+        trails. Deleting the team's last definition turns catalog enforcement off,
+        so any action name is accepted again. Expects no request body and answers
+        204 with none.
+      summary: Delete an event definition
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '204':
+          description: No response body
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Not found
+          description: No EventDefinition has that id, or it belongs to another team.
+  /api/v0/event-definitions/{action}/schema-versions/:
+    get:
+      operationId: schema_versions_list
+      description: 'Every version of one action''s schema, newest first, drafts and
+        deprecated versions included. Needs a team API key with any scope. Cursor-paginated:
+        follow ``next`` until it is ``null``.'
+      summary: List schema versions
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Cursor from the previous page.
+      - name: limit
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEventSchemaVersionList'
+              examples:
+                DraftVersion:
+                  value:
+                    next: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cD00ODY%3D
+                    previous: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cj0xJnA9NDg3
+                    results:
+                    - version: 2
+                      status: draft
+                      schema:
+                        $schema: https://json-schema.org/draft/2020-12/schema
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              invoice_number:
+                                type: string
+                              void_reason:
+                                type: string
+                              source:
+                                type: string
+                              reason:
+                                type: string
+                              request_id:
+                                type: string
+                            required:
+                            - invoice_number
+                            additionalProperties:
+                              type: string
+                          actor:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                properties:
+                                  on_behalf_of_type:
+                                    type: string
+                                  on_behalf_of_id:
+                                    type: string
+                                dependentRequired:
+                                  on_behalf_of_type:
+                                  - on_behalf_of_id
+                                  on_behalf_of_id:
+                                  - on_behalf_of_type
+                                additionalProperties:
+                                  type: string
+                          targets:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                metadata:
+                                  type: object
+                                  additionalProperties:
+                                    type: string
+                      published_at: null
+                      deprecated_at: null
+                      deprecation_deadline: null
+                      created_at: '2026-09-29T14:03:11.482000Z'
+                      updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Draft version
+                PublishedVersion:
+                  value:
+                    next: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cD00ODY%3D
+                    previous: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cj0xJnA9NDg3
+                    results:
+                    - version: 2
+                      status: published
+                      schema:
+                        $schema: https://json-schema.org/draft/2020-12/schema
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              invoice_number:
+                                type: string
+                              void_reason:
+                                type: string
+                              source:
+                                type: string
+                              reason:
+                                type: string
+                              request_id:
+                                type: string
+                            required:
+                            - invoice_number
+                            additionalProperties:
+                              type: string
+                          actor:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                properties:
+                                  on_behalf_of_type:
+                                    type: string
+                                  on_behalf_of_id:
+                                    type: string
+                                dependentRequired:
+                                  on_behalf_of_type:
+                                  - on_behalf_of_id
+                                  on_behalf_of_id:
+                                  - on_behalf_of_type
+                                additionalProperties:
+                                  type: string
+                          targets:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                metadata:
+                                  type: object
+                                  additionalProperties:
+                                    type: string
+                      published_at: '2026-09-29T14:30:00.000000Z'
+                      deprecated_at: null
+                      deprecation_deadline: null
+                      created_at: '2026-09-29T14:03:11.482000Z'
+                      updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Published version
+                DeprecatedVersion:
+                  value:
+                    next: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cD00ODY%3D
+                    previous: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cj0xJnA9NDg3
+                    results:
+                    - version: 1
+                      status: deprecated
+                      schema:
+                        $schema: https://json-schema.org/draft/2020-12/schema
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              invoice_number:
+                                type: string
+                              void_reason:
+                                type: string
+                              source:
+                                type: string
+                              reason:
+                                type: string
+                              request_id:
+                                type: string
+                            required:
+                            - invoice_number
+                            additionalProperties:
+                              type: string
+                          actor:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                properties:
+                                  on_behalf_of_type:
+                                    type: string
+                                  on_behalf_of_id:
+                                    type: string
+                                dependentRequired:
+                                  on_behalf_of_type:
+                                  - on_behalf_of_id
+                                  on_behalf_of_id:
+                                  - on_behalf_of_type
+                                additionalProperties:
+                                  type: string
+                          targets:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                metadata:
+                                  type: object
+                                  additionalProperties:
+                                    type: string
+                      published_at: '2026-09-01T09:00:00.000000Z'
+                      deprecated_at: '2026-09-29T14:30:00.000000Z'
+                      deprecation_deadline: '2026-12-28T14:30:00.000000Z'
+                      created_at: '2026-09-29T14:03:11.482000Z'
+                      updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Deprecated version
+          description: A page of the action's schema versions.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                UnknownAction:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Unknown action
+                InvalidCursor:
+                  value:
+                    detail: Invalid cursor
+                  summary: Invalid cursor
+          description: The action is not defined for this team, or the cursor is not
+            one this endpoint issued.
+    post:
+      operationId: schema_versions_create
+      description: Store a document as a new draft at the next version number; numbers
+        are never reused. A draft validates nothing until it is published. To change
+        a published version, create a draft from its document with your edit applied.
+        Requires the ``manage`` scope on a key that is not limited to named trails.
+      summary: Create a draft schema version
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      tags:
+      - event-definitions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+            examples:
+              ASchemaDocument:
+                value:
+                  schema:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      metadata:
+                        type: object
+                        properties:
+                          invoice_number:
+                            type: string
+                          void_reason:
+                            type: string
+                          source:
+                            type: string
+                          reason:
+                            type: string
+                          request_id:
+                            type: string
+                        required:
+                        - invoice_number
+                        additionalProperties:
+                          type: string
+                      actor:
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              on_behalf_of_type:
+                                type: string
+                              on_behalf_of_id:
+                                type: string
+                            dependentRequired:
+                              on_behalf_of_type:
+                              - on_behalf_of_id
+                              on_behalf_of_id:
+                              - on_behalf_of_type
+                            additionalProperties:
+                              type: string
+                      targets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              additionalProperties:
+                                type: string
+                summary: A schema document
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '201':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: A validator for this version; it changes whenever the version
+                does. Send it back as `If-Match`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchemaVersion'
+              examples:
+                DraftVersion:
+                  value:
+                    version: 2
+                    status: draft
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: null
+                    deprecated_at: null
+                    deprecation_deadline: null
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Draft version
+          description: The new draft.
+        '400':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/FieldErrors'
+                - $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                RemoteReferenceRefused:
+                  value:
+                    schema:
+                    - Every $ref must point inside this document (#...); remote refs
+                      are not allowed.
+                  summary: Remote reference refused
+                MalformedJSON:
+                  value:
+                    detail: 'JSON parse error - Expecting value: line 1 column 1 (char
+                      0)'
+                  summary: Malformed JSON
+          description: 'The document was refused: it is not a JSON object, is too
+            large, is not a valid JSON Schema 2020-12 document, has a remote `$ref`,
+            or the body is not JSON.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Not found
+          description: No EventDefinition has that id, or it belongs to another team.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                CreatedConcurrently:
+                  value:
+                    detail: That version was created concurrently. Save again.
+                  summary: Created concurrently
+          description: Another request created a version at the same moment; send
+            the request again.
+  /api/v0/event-definitions/{action}/schema-versions/{version}/:
+    get:
+      operationId: schema_versions_retrieve
+      description: One version of an action's schema, with its status and an `ETag`.
+        Needs any team API key.
+      summary: Retrieve a schema version
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      - in: path
+        name: version
+        schema:
+          type: integer
+        description: The schema version number, e.g. 2.
+        required: true
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: A validator for this version; it changes whenever the version
+                does. Send it back as `If-Match`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchemaVersion'
+              examples:
+                DraftVersion:
+                  value:
+                    version: 2
+                    status: draft
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: null
+                    deprecated_at: null
+                    deprecation_deadline: null
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Draft version
+                PublishedVersion:
+                  value:
+                    version: 2
+                    status: published
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: '2026-09-29T14:30:00.000000Z'
+                    deprecated_at: null
+                    deprecation_deadline: null
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Published version
+                DeprecatedVersion:
+                  value:
+                    version: 1
+                    status: deprecated
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: '2026-09-01T09:00:00.000000Z'
+                    deprecated_at: '2026-09-29T14:30:00.000000Z'
+                    deprecation_deadline: '2026-12-28T14:30:00.000000Z'
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Deprecated version
+          description: The version.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                UnknownAction:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Unknown action
+                UnknownVersion:
+                  value:
+                    detail: No EventSchemaVersion matches the given query.
+                  summary: Unknown version
+          description: The action is not defined for this team, or it has no such
+            schema version.
+    put:
+      operationId: schema_versions_update
+      description: 'Replace the whole document of a draft in place; the version number
+        does not change. This is how fields are added, renamed and removed: read the
+        draft, edit its `properties` and `required`, and send the document back. Send
+        the `ETag` you read as `If-Match` so a concurrent edit is not overwritten.
+        A published version cannot be changed. Requires the ``manage`` scope on a
+        key that is not limited to named trails.'
+      summary: Replace a draft's document
+      parameters:
+      - in: header
+        name: If-Match
+        schema:
+          type: string
+        description: The `ETag` from your last read of this draft. If the draft has
+          changed since, the update answers `412` instead of overwriting it. Without
+          the header the last write wins.
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      - in: path
+        name: version
+        schema:
+          type: integer
+        description: The schema version number, e.g. 2.
+        required: true
+      tags:
+      - event-definitions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+            examples:
+              ASchemaDocument:
+                value:
+                  schema:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      metadata:
+                        type: object
+                        properties:
+                          invoice_number:
+                            type: string
+                          void_reason:
+                            type: string
+                          source:
+                            type: string
+                          reason:
+                            type: string
+                          request_id:
+                            type: string
+                        required:
+                        - invoice_number
+                        additionalProperties:
+                          type: string
+                      actor:
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              on_behalf_of_type:
+                                type: string
+                              on_behalf_of_id:
+                                type: string
+                            dependentRequired:
+                              on_behalf_of_type:
+                              - on_behalf_of_id
+                              on_behalf_of_id:
+                              - on_behalf_of_type
+                            additionalProperties:
+                              type: string
+                      targets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              additionalProperties:
+                                type: string
+                summary: A schema document
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: A validator for this version; it changes whenever the version
+                does. Send it back as `If-Match`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchemaVersion'
+              examples:
+                DraftVersion:
+                  value:
+                    version: 2
+                    status: draft
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: null
+                    deprecated_at: null
+                    deprecation_deadline: null
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Draft version
+          description: The draft as it now stands.
+        '400':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/FieldErrors'
+                - $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                RemoteReferenceRefused:
+                  value:
+                    schema:
+                    - Every $ref must point inside this document (#...); remote refs
+                      are not allowed.
+                  summary: Remote reference refused
+                MalformedJSON:
+                  value:
+                    detail: 'JSON parse error - Expecting value: line 1 column 1 (char
+                      0)'
+                  summary: Malformed JSON
+          description: 'The document was refused: it is not a JSON object, is too
+            large, is not a valid JSON Schema 2020-12 document, has a remote `$ref`,
+            or the body is not JSON.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                UnknownAction:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Unknown action
+                UnknownVersion:
+                  value:
+                    detail: No EventSchemaVersion matches the given query.
+                  summary: Unknown version
+          description: The action is not defined for this team, or it has no such
+            schema version.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                PublishedVersionsAreImmutable:
+                  value:
+                    detail: Published schema versions cannot be changed. Create a
+                      new draft instead.
+                  summary: Published versions are immutable
+          description: The version is published, so it is immutable.
+        '412':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                DraftChangedSinceItWasRead:
+                  value:
+                    detail: The draft changed since you read it. Fetch it again and
+                      reapply your change.
+                  summary: Draft changed since it was read
+          description: '`If-Match` no longer matches: the draft changed since you
+            read it.'
+    delete:
+      operationId: schema_versions_destroy
+      description: Delete a draft. Its version number is never reused. A published
+        version cannot be deleted. Requires the ``manage`` scope on a key that is
+        not limited to named trails. Expects no request body and answers 204 with
+        none.
+      summary: Delete a draft
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      - in: path
+        name: version
+        schema:
+          type: integer
+        description: The schema version number, e.g. 2.
+        required: true
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '204':
+          description: No response body
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                UnknownAction:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Unknown action
+                UnknownVersion:
+                  value:
+                    detail: No EventSchemaVersion matches the given query.
+                  summary: Unknown version
+          description: The action is not defined for this team, or it has no such
+            schema version.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                PublishedVersionsCannotBeDeleted:
+                  value:
+                    detail: Published schema versions cannot be deleted.
+                  summary: Published versions cannot be deleted
+          description: The version is published, so it cannot be deleted.
+  /api/v0/event-definitions/{action}/schema-versions/{version}/deprecate/:
+    post:
+      operationId: schema_versions_deprecate
+      description: 'Start the migration window on a superseded version: producers
+        pinned to it are accepted until its deadline, then refused. Only a published
+        version can be deprecated, and not the one ingest selects when an event pins
+        nothing: publish a newer one first. Deprecating a deprecated version changes
+        nothing. Requires the ``manage`` scope on a key that is not limited to named
+        trails. Expects no request body.'
+      summary: Deprecate a version
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      - in: path
+        name: version
+        schema:
+          type: integer
+        description: The schema version number, e.g. 2.
+        required: true
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: A validator for this version; it changes whenever the version
+                does. Send it back as `If-Match`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchemaVersion'
+              examples:
+                DeprecatedVersion:
+                  value:
+                    version: 1
+                    status: deprecated
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: '2026-09-01T09:00:00.000000Z'
+                    deprecated_at: '2026-09-29T14:30:00.000000Z'
+                    deprecation_deadline: '2026-12-28T14:30:00.000000Z'
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Deprecated version
+          description: The deprecated version.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                UnknownAction:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Unknown action
+                UnknownVersion:
+                  value:
+                    detail: No EventSchemaVersion matches the given query.
+                  summary: Unknown version
+          description: The action is not defined for this team, or it has no such
+            schema version.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                OnlyAPublishedVersionCanBeDeprecated:
+                  value:
+                    detail: Only published versions can be deprecated.
+                  summary: Only a published version can be deprecated
+                TheDefaultVersionCannotBeDeprecated:
+                  value:
+                    detail: Publish a newer version first.
+                  summary: The default version cannot be deprecated
+          description: The version is a draft, or it is the one ingest currently selects.
+  /api/v0/event-definitions/{action}/schema-versions/{version}/publish/:
+    post:
+      operationId: schema_versions_publish
+      description: 'Publish a draft: ingest validates against it from now on, and
+        the version it supersedes starts its deprecation window. Publishing a published
+        version changes nothing. Requires the ``manage`` scope on a key that is not
+        limited to named trails. Expects no request body.'
+      summary: Publish a draft
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      - in: path
+        name: version
+        schema:
+          type: integer
+        description: The schema version number, e.g. 2.
+        required: true
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: A validator for this version; it changes whenever the version
+                does. Send it back as `If-Match`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventSchemaVersion'
+              examples:
+                PublishedVersion:
+                  value:
+                    version: 2
+                    status: published
+                    schema:
+                      $schema: https://json-schema.org/draft/2020-12/schema
+                      type: object
+                      properties:
+                        metadata:
+                          type: object
+                          properties:
+                            invoice_number:
+                              type: string
+                            void_reason:
+                              type: string
+                            source:
+                              type: string
+                            reason:
+                              type: string
+                            request_id:
+                              type: string
+                          required:
+                          - invoice_number
+                          additionalProperties:
+                            type: string
+                        actor:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                on_behalf_of_type:
+                                  type: string
+                                on_behalf_of_id:
+                                  type: string
+                              dependentRequired:
+                                on_behalf_of_type:
+                                - on_behalf_of_id
+                                on_behalf_of_id:
+                                - on_behalf_of_type
+                              additionalProperties:
+                                type: string
+                        targets:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              metadata:
+                                type: object
+                                additionalProperties:
+                                  type: string
+                    published_at: '2026-09-29T14:30:00.000000Z'
+                    deprecated_at: null
+                    deprecation_deadline: null
+                    created_at: '2026-09-29T14:03:11.482000Z'
+                    updated_at: '2026-09-29T14:20:05.001000Z'
+                  summary: Published version
+          description: The published version.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                UnknownAction:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Unknown action
+                UnknownVersion:
+                  value:
+                    detail: No EventSchemaVersion matches the given query.
+                  summary: Unknown version
+          description: The action is not defined for this team, or it has no such
+            schema version.
+  /api/v0/event-definitions/{action}/schema-versions/check/:
+    post:
+      operationId: schema_versions_check
+      description: Dry-run a document against the action's newest 50 stored events
+        and report which it would reject; nothing is stored. Stored values are checked
+        after redaction. Needs a team API key with any scope.
+      summary: Check a document against recent events
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        description: The action name, e.g. invoice.voided.
+        required: true
+      tags:
+      - event-definitions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+            examples:
+              ASchemaDocument:
+                value:
+                  schema:
+                    $schema: https://json-schema.org/draft/2020-12/schema
+                    type: object
+                    properties:
+                      metadata:
+                        type: object
+                        properties:
+                          invoice_number:
+                            type: string
+                          void_reason:
+                            type: string
+                          source:
+                            type: string
+                          reason:
+                            type: string
+                          request_id:
+                            type: string
+                        required:
+                        - invoice_number
+                        additionalProperties:
+                          type: string
+                      actor:
+                        type: object
+                        properties:
+                          metadata:
+                            type: object
+                            properties:
+                              on_behalf_of_type:
+                                type: string
+                              on_behalf_of_id:
+                                type: string
+                            dependentRequired:
+                              on_behalf_of_type:
+                              - on_behalf_of_id
+                              on_behalf_of_id:
+                              - on_behalf_of_type
+                            additionalProperties:
+                              type: string
+                      targets:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              additionalProperties:
+                                type: string
+                summary: A schema document
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EventSchemaDocumentRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaCheck'
+              examples:
+                OneFailingEvent:
+                  value:
+                    checked: 50
+                    failed: 1
+                    failures:
+                    - event_id: 01J8Z3N6Q4W2R7T5V9X1B3C5D7
+                      occurred_at: '2026-09-29T13:58:02.114000Z'
+                      field: metadata.invoice_number
+                      message: '''invoice_number'' is a required property'
+                  summary: One failing event
+          description: How many events were run and which failed.
+        '400':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/FieldErrors'
+                - $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                RemoteReferenceRefused:
+                  value:
+                    schema:
+                    - Every $ref must point inside this document (#...); remote refs
+                      are not allowed.
+                  summary: Remote reference refused
+                MalformedJSON:
+                  value:
+                    detail: 'JSON parse error - Expecting value: line 1 column 1 (char
+                      0)'
+                  summary: Malformed JSON
+          description: 'The document was refused: it is not a JSON object, is too
+            large, is not a valid JSON Schema 2020-12 document, has a remote `$ref`,
+            or the body is not JSON.'
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No EventDefinition matches the given query.
+                  summary: Not found
+          description: No EventDefinition has that id, or it belongs to another team.
   /api/v0/events/:
     get:
       operationId: events_list
@@ -93,7 +1756,7 @@ paths:
         name: actor_type
         schema:
           type: string
-        description: 'One of: user, system, anonymous.'
+        description: 'One of: user, system, agent, anonymous.'
       - in: query
         name: created_after
         schema:
@@ -223,7 +1886,7 @@ paths:
                 InvalidActorType:
                   value:
                     actor_type:
-                    - 'Not one of: user, system, anonymous.'
+                    - 'Not one of: user, system, agent, anonymous.'
                   summary: Invalid actor type
                 RelevanceWithoutQuery:
                   value:
@@ -851,7 +2514,7 @@ paths:
               examples:
                 ExportQueued:
                   value:
-                    id: 42
+                    id: 0192f6c2-5d19-7a64-8f0b-2e7c3d9a6b18
                     status: pending
                     format: csv
                     row_count: 0
@@ -927,7 +2590,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: integer
+          type: string
+          format: uuid
         required: true
       tags:
       - exports
@@ -942,7 +2606,7 @@ paths:
               examples:
                 CompletedExport:
                   value:
-                    id: 42
+                    id: 0192f6c2-5d19-7a64-8f0b-2e7c3d9a6b18
                     status: complete
                     format: csv
                     row_count: 1
@@ -952,7 +2616,7 @@ paths:
                     finished_at: '2026-09-29T15:00:02.008000Z'
                     expires_at: '2026-09-30T15:00:02.008000Z'
                     error: ''
-                    download_url: https://api.santati.io/api/v0/exports/42/download/?token=IjQyIjp0cnVl:1759154591:7a1f4c6b8e2d5a3f9c7b1e4d6a8c2f5b7e9d3a1c4f6b8e2d5a7c9f1b3e6d8a0c
+                    download_url: https://api.santati.io/api/v0/exports/0192f6c2-5d19-7a64-8f0b-2e7c3d9a6b18/download/?token=IjQyIjp0cnVl:1759154591:7a1f4c6b8e2d5a3f9c7b1e4d6a8c2f5b7e9d3a1c4f6b8e2d5a7c9f1b3e6d8a0c
                   summary: Completed export
           description: The export job as it stands now.
         '403':
@@ -988,7 +2652,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: integer
+          type: string
+          format: uuid
         required: true
       - in: query
         name: token
@@ -1096,7 +2761,7 @@ paths:
                     next: https://api.santati.io/api/v0/organizations/?cursor=cD00ODY%3D
                     previous: https://api.santati.io/api/v0/organizations/?cursor=cj0xJnA9NDg3
                     results:
-                    - id: 7
+                    - id: 0192f6b0-0e5c-7f81-9a37-4b6d2e8c1f05
                       external_id: org_acme_logistics
                       name: Acme Logistics
                       retention_months: 24
@@ -1126,6 +2791,207 @@ paths:
                     detail: Invalid cursor
                   summary: Invalid cursor
           description: The cursor is not one this endpoint issued.
+  /api/v0/standard-events/:
+    get:
+      operationId: standard_events_list
+      description: 'Santati''s recommended actions, grouped into packs. The catalog
+        is the same for every team and any key scope reads it; install packs with
+        `standard_events_install`. `schema` is the v1 document installed for each
+        action: installing copies it into the team''s catalog, and the copy is the
+        team''s own to edit like any custom schema. `ocsf` maps each action to an
+        OCSF class and activity. Not paginated.'
+      summary: List the standard event catalog
+      tags:
+      - event-definitions
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardEventCatalog'
+              examples:
+                StandardEventCatalog:
+                  value:
+                    packs:
+                    - slug: agents
+                      name: AI agents
+                      description: Agent configuration, delegation, runs, tool calls,
+                        approvals, guardrails and knowledge sources.
+                      events:
+                      - action: agent.tool.called
+                        description: 'An agent called a tool. result: success or error.'
+                        target_types:
+                        - agent
+                        - agent_run
+                        - tool
+                        required_metadata:
+                        - gen_ai.tool.name
+                        - result
+                        optional_metadata:
+                        - duration_ms
+                        - gen_ai.tool.call.id
+                        - gen_ai.tool.type
+                        - source
+                        - reason
+                        - request_id
+                        schema:
+                          $schema: https://json-schema.org/draft/2020-12/schema
+                          type: object
+                          properties:
+                            metadata:
+                              type: object
+                              properties:
+                                gen_ai.tool.name:
+                                  type: string
+                                result:
+                                  type: string
+                                duration_ms:
+                                  type: string
+                                gen_ai.tool.call.id:
+                                  type: string
+                                gen_ai.tool.type:
+                                  type: string
+                                source:
+                                  type: string
+                                reason:
+                                  type: string
+                                request_id:
+                                  type: string
+                              required:
+                              - gen_ai.tool.name
+                              - result
+                              additionalProperties:
+                                type: string
+                            actor:
+                              type: object
+                              properties:
+                                metadata:
+                                  type: object
+                                  properties:
+                                    on_behalf_of_type:
+                                      type: string
+                                    on_behalf_of_id:
+                                      type: string
+                                  dependentRequired:
+                                    on_behalf_of_type:
+                                    - on_behalf_of_id
+                                    on_behalf_of_id:
+                                    - on_behalf_of_type
+                                  additionalProperties:
+                                    type: string
+                            targets:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  metadata:
+                                    type: object
+                                    additionalProperties:
+                                      type: string
+                        ocsf:
+                          version: 1.9.0
+                          class_uid: 6003
+                          activity_id: 99
+                          status_id: null
+                  summary: Standard event catalog
+          description: Every standard pack with its actions, schemas and OCSF mappings.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+  /api/v0/standard-events/install/:
+    post:
+      operationId: standard_events_install
+      description: 'Define every action of the chosen packs for the team, each with
+        its recommended target types and a published v1 schema. An action the team
+        already defines, active or retired, is skipped and left untouched, so installing
+        twice is safe. Installed schemas are the team''s own copies: editing one needs
+        no special step. Requires the ``manage`` scope on a key that is not limited
+        to named trails.'
+      summary: Install standard packs
+      tags:
+      - event-definitions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StandardPackInstallRequest'
+            examples:
+              InstallTheAgentsPack:
+                value:
+                  packs:
+                  - agents
+                summary: Install the agents pack
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StandardPackInstallRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StandardPackInstallRequest'
+        required: true
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardPackInstallResult'
+              examples:
+                PackInstalled:
+                  value:
+                    created:
+                    - agent.tool.called
+                    skipped:
+                    - agent.created
+                  summary: Pack installed
+          description: Which actions were defined and which were already there.
+        '400':
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/FieldErrors'
+                - $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                MalformedJSON:
+                  value:
+                    detail: 'JSON parse error - Expecting value: line 1 column 1 (char
+                      0)'
+                  summary: Malformed JSON
+          description: A pack slug is not one the catalog lists, none was given, or
+            the body is not JSON.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                CatalogChangedDuringTheInstall:
+                  value:
+                    detail: The catalog changed while adding packs. Nothing was added;
+                      try again.
+                  summary: Catalog changed during the install
+          description: Another request changed the catalog during the install. Nothing
+            was added.
   /api/v0/streams/:
     get:
       operationId: streams_list
@@ -1162,7 +3028,7 @@ paths:
                     next: https://api.santati.io/api/v0/streams/?cursor=cD00ODY%3D
                     previous: https://api.santati.io/api/v0/streams/?cursor=cj0xJnA9NDg3
                     results:
-                    - id: 12
+                    - id: 0192f6b1-7a40-7d3c-b5e8-1c2f9a0d4e63
                       name: siem-webhook
                       trail: billing
                       status: active
@@ -1189,7 +3055,7 @@ paths:
                           content_type: json
                           headers:
                             X-Source: santati
-                          timeout_seconds: 10
+                          timeout_seconds: 15
                       created_at: '2026-09-29T14:03:11.482000Z'
                       updated_at: '2026-09-29T14:03:11.482000Z'
                   summary: Webhook stream
@@ -1217,11 +3083,13 @@ paths:
           description: The cursor is not one this endpoint issued.
     post:
       operationId: streams_create
-      description: Create an outbound log stream and its destination in one payload.
+      description: 'Create an outbound log stream and its destination in one payload.
         Requires a team API key with the ``manage`` scope. The destination config
-        is validated against the plugin's declared fields and its URL policy, so a
-        config that could never be delivered is refused here rather than failing silently
-        at delivery time.
+        is validated against the plugin''s declared fields and its URL policy, so
+        a config that could never be delivered is refused here rather than failing
+        silently at delivery time. The delivery service is given the stream''s spec
+        before the response: when it cannot be reached the stream is not created and
+        the request answers 503.'
       summary: Create a log stream
       tags:
       - log-streams
@@ -1241,7 +3109,7 @@ paths:
                     content_type: json
                     headers:
                       X-Source: santati
-                    timeout_seconds: 10
+                    timeout_seconds: 15
                   auth:
                     header_name: X-Api-Key
                     header_value: s3cret
@@ -1276,7 +3144,7 @@ paths:
               examples:
                 StreamCreated:
                   value:
-                    id: 12
+                    id: 0192f6b1-7a40-7d3c-b5e8-1c2f9a0d4e63
                     name: siem-webhook
                     trail: billing
                     status: active
@@ -1303,7 +3171,7 @@ paths:
                         content_type: json
                         headers:
                           X-Source: santati
-                        timeout_seconds: 10
+                        timeout_seconds: 15
                     created_at: '2026-09-29T14:03:11.482000Z'
                     updated_at: '2026-09-29T14:03:11.482000Z'
                   summary: Stream created
@@ -1352,6 +3220,19 @@ paths:
                   value:
                     detail: You do not have permission to perform this action.
           description: Missing, invalid or under-scoped API key.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                DeliveryServiceUnavailable:
+                  value:
+                    detail: 'log stream delivery service unreachable: All connection
+                      attempts failed'
+                  summary: Delivery service unavailable
+          description: The log stream delivery service is unreachable or refused the
+            change.
   /api/v0/streams/{id}/:
     get:
       operationId: streams_retrieve
@@ -1362,7 +3243,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: integer
+          type: string
+          format: uuid
         required: true
       tags:
       - log-streams
@@ -1377,7 +3259,7 @@ paths:
               examples:
                 WebhookStream:
                   value:
-                    id: 12
+                    id: 0192f6b1-7a40-7d3c-b5e8-1c2f9a0d4e63
                     name: siem-webhook
                     trail: billing
                     status: active
@@ -1404,7 +3286,7 @@ paths:
                         content_type: json
                         headers:
                           X-Source: santati
-                        timeout_seconds: 10
+                        timeout_seconds: 15
                     created_at: '2026-09-29T14:03:11.482000Z'
                     updated_at: '2026-09-29T14:03:11.482000Z'
                   summary: Webhook stream
@@ -1435,13 +3317,16 @@ paths:
       description: 'Edit a stream, its destination or its match rules. Requires the
         ``manage`` scope. Every destination field is optional: omitting ``config``
         or ``auth`` keeps the stored one, and the stored config and secret are still
-        validated together with whatever the payload changes.'
+        validated together with whatever the payload changes. The delivery service
+        is given the new spec before the response; when it refuses, the edit is rolled
+        back and the request answers 503.'
       summary: Update a log stream
       parameters:
       - in: path
         name: id
         schema:
-          type: integer
+          type: string
+          format: uuid
         required: true
       tags:
       - log-streams
@@ -1472,7 +3357,7 @@ paths:
               examples:
                 StreamPaused:
                   value:
-                    id: 12
+                    id: 0192f6b1-7a40-7d3c-b5e8-1c2f9a0d4e63
                     name: siem-webhook
                     trail: billing
                     status: inactive
@@ -1499,7 +3384,7 @@ paths:
                         content_type: json
                         headers:
                           X-Source: santati
-                        timeout_seconds: 10
+                        timeout_seconds: 15
                     created_at: '2026-09-29T14:03:11.482000Z'
                     updated_at: '2026-09-29T14:20:05.001000Z'
                   summary: Stream paused
@@ -1545,16 +3430,32 @@ paths:
                     detail: No LogStream matches the given query.
                   summary: Not found
           description: No LogStream has that id, or it belongs to another team.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                DeliveryServiceUnavailable:
+                  value:
+                    detail: 'log stream delivery service unreachable: All connection
+                      attempts failed'
+                  summary: Delivery service unavailable
+          description: The log stream delivery service is unreachable or refused the
+            change.
     delete:
       operationId: streams_destroy
-      description: Delete a stream, its destination and its delivery history. Requires
-        the ``manage`` scope. Expects no request body and answers 204 with none.
+      description: Delete a stream and its destination. Requires the ``manage`` scope.
+        The delivery service drops the stream's queue, its dead-letter queue and its
+        stored spec first; when the service cannot be reached nothing is deleted and
+        the request answers 503. Expects no request body and answers 204 with none.
       summary: Delete a log stream
       parameters:
       - in: path
         name: id
         schema:
-          type: integer
+          type: string
+          format: uuid
         required: true
       tags:
       - log-streams
@@ -1584,6 +3485,141 @@ paths:
                     detail: No LogStream matches the given query.
                   summary: Not found
           description: No LogStream has that id, or it belongs to another team.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                DeliveryServiceUnavailable:
+                  value:
+                    detail: 'log stream delivery service unreachable: All connection
+                      attempts failed'
+                  summary: Delivery service unavailable
+          description: The log stream delivery service is unreachable or refused the
+            change.
+  /api/v0/streams/{id}/signing-secret/:
+    get:
+      operationId: streams_signing_secret_retrieve
+      description: The Standard Webhooks signing secret this stream's outbound webhooks
+        are signed with, and when the previous one stops verifying. Requires a team
+        API key with the ``manage`` scope, because the secret is a credential. Both
+        secrets sign during the 24-hour overlap after a rotation, so a verifier can
+        be updated without a delivery gap.
+      summary: Retrieve a stream signing secret
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - log-streams
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningSecret'
+              examples:
+                SigningSecret:
+                  value:
+                    signing_secret: whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw
+                    previous_signing_secret_expires_at: null
+                  summary: Signing secret
+          description: The current signing secret and the previous one's expiry.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No LogStream matches the given query.
+                  summary: Not found
+          description: No LogStream has that id, or it belongs to another team.
+  /api/v0/streams/{id}/signing-secret/rotate/:
+    post:
+      operationId: streams_signing_secret_rotate
+      description: Mint a new signing secret for this stream. Requires a team API
+        key with the ``manage`` scope. The current secret moves into the overlap slot
+        and keeps verifying for 24 hours, so in-flight retries and an endpoint mid-update
+        still pass. The stream's spec is pushed to the delivery service before the
+        response; when the service refuses, the rotation is rolled back and the request
+        answers 503. Expects no request body.
+      summary: Rotate a stream signing secret
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - log-streams
+      security:
+      - ApiKeyAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SigningSecret'
+              examples:
+                RotatedSigningSecret:
+                  value:
+                    signing_secret: whsec_p5jXN8AQM9LWM0D4loKWxJekMfKQ9r8GKYqrTwjUPD8I
+                    previous_signing_secret_expires_at: '2026-10-01T12:00:00Z'
+                  summary: Rotated signing secret
+          description: The new signing secret and when the previous one stops verifying.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                Forbidden:
+                  value:
+                    detail: You do not have permission to perform this action.
+          description: Missing, invalid or under-scoped API key.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                NotFound:
+                  value:
+                    detail: No LogStream matches the given query.
+                  summary: Not found
+          description: No LogStream has that id, or it belongs to another team.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorDetail'
+              examples:
+                DeliveryServiceUnavailable:
+                  value:
+                    detail: 'log stream delivery service unreachable: All connection
+                      attempts failed'
+                  summary: Delivery service unavailable
+          description: The log stream delivery service is unreachable or refused the
+            change.
   /api/v0/trails/:
     get:
       operationId: trails_list
@@ -1918,7 +3954,8 @@ components:
         A token is minted per response, so polling extends the window rather than racing it.
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
           description: The export's id, used to poll this record and to name the download
             URL.
@@ -2329,8 +4366,8 @@ components:
       properties:
         type:
           type: string
-          description: 'Actor kind: user, system or anonymous. The relay path stores
-            whatever Ankusa relayed.'
+          description: 'Actor kind: user, system, agent or anonymous. The relay path
+            stores whatever Ankusa relayed.'
           maxLength: 64
         id:
           type: string
@@ -2347,7 +4384,8 @@ components:
             type: string
             maxLength: 500
           description: 'Actor metadata: at most 50 keys, each at most 40 characters
-            of A-Z a-z 0-9 _ . -, each value at most 500 characters.'
+            of A-Z a-z 0-9 _ . -, each value at most 500 characters. An agent acting
+            for someone sets on_behalf_of_type and on_behalf_of_id.'
       required:
       - type
     EventActorRequest:
@@ -2362,8 +4400,8 @@ components:
         type:
           type: string
           minLength: 1
-          description: 'Actor kind: user, system or anonymous. The relay path stores
-            whatever Ankusa relayed.'
+          description: 'Actor kind: user, system, agent or anonymous. The relay path
+            stores whatever Ankusa relayed.'
           maxLength: 64
         id:
           type: string
@@ -2383,7 +4421,8 @@ components:
             minLength: 1
             maxLength: 500
           description: 'Actor metadata: at most 50 keys, each at most 40 characters
-            of A-Z a-z 0-9 _ . -, each value at most 500 characters.'
+            of A-Z a-z 0-9 _ . -, each value at most 500 characters. An agent acting
+            for someone sets on_behalf_of_type and on_behalf_of_id.'
       required:
       - type
     EventBatchAcceptedItem:
@@ -2535,6 +4574,35 @@ components:
       - description
       - is_active
       - updated_at
+    EventDefinitionWriteRequest:
+      type: object
+      description: The writable part of a definition, for create and (partially) for
+        update.
+      properties:
+        action:
+          type: string
+          minLength: 1
+          description: 'The action name, e.g. invoice.voided: dotted segments of letters,
+            digits, ''-'' and ''_''. Sending a new value on an update renames the
+            action; its schema versions go with it.'
+          maxLength: 255
+        description:
+          type: string
+          description: What this action means, for the people reading the catalog.
+        allowed_target_types:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          description: Target types an event with this action may name; empty means
+            any target type.
+        is_active:
+          type: boolean
+          description: True while the action is in force. A definition that is not
+            active is treated as undefined when a team has any definitions at all.
+      required:
+      - action
     EventEnvelopeRequest:
       type: object
       description: |-
@@ -2610,6 +4678,77 @@ components:
       oneOf:
       - $ref: '#/components/schemas/EventEnvelopeRequest'
       - $ref: '#/components/schemas/EventBatchRequest'
+    EventSchemaDocumentRequest:
+      type: object
+      description: 'A schema document: the body of a draft create or update, and of
+        a dry run.'
+      properties:
+        schema:
+          description: The whole JSON Schema 2020-12 document, as a JSON object. Every
+            `$ref` must point inside it (`#...`).
+      required:
+      - schema
+    EventSchemaVersion:
+      type: object
+      properties:
+        version:
+          type: integer
+          readOnly: true
+          description: The per-action version number; never reused, even after a draft
+            is deleted.
+        status:
+          allOf:
+          - $ref: '#/components/schemas/SchemaVersionStatusEnum'
+          readOnly: true
+          description: |-
+            draft: editable, validates nothing. published: immutable, validates ingest. deprecated: a newer version superseded it; pinned producers are accepted until `deprecation_deadline`.
+
+            * `draft` - Draft
+            * `published` - Published
+            * `deprecated` - Deprecated
+        schema:
+          readOnly: true
+          description: The JSON Schema 2020-12 document. It validates the event's
+            `metadata`, `actor.metadata` and each `targets[].metadata`; metadata values
+            are always strings.
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the version was published; null for a draft.
+        deprecated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When a newer version superseded this one; null until then.
+        deprecation_deadline:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When a deprecated version stops accepting pinned traffic; null
+            while it is not deprecated.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the draft was first created.
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the version last changed. The `ETag` tracks it.
+      required:
+      - created_at
+      - deprecated_at
+      - deprecation_deadline
+      - published_at
+      - schema
+      - status
+      - updated_at
+      - version
     EventTarget:
       type: object
       description: |-
@@ -2747,13 +4886,14 @@ components:
             type: string
           description: 'Extra headers to send with every request, as a JSON object
             or as newline-separated ''Name: value'' lines. These names are reserved
-            and refused: content-encoding, content-type, user-agent, x-santati-delivered-at,
-            x-santati-delivery-count, x-santati-stream-id, x-santati-stream-name.'
+            and refused: content-encoding, content-type, user-agent, webhook-id, webhook-signature,
+            webhook-timestamp, x-santati-delivered-at, x-santati-delivery-count, x-santati-stream-id,
+            x-santati-stream-name.'
         timeout_seconds:
           type: integer
           maximum: 60
           minimum: 1
-          default: 10
+          default: 15
           description: Request timeout in seconds, 1 to 60.
       required:
       - url
@@ -2788,13 +4928,14 @@ components:
             minLength: 1
           description: 'Extra headers to send with every request, as a JSON object
             or as newline-separated ''Name: value'' lines. These names are reserved
-            and refused: content-encoding, content-type, user-agent, x-santati-delivered-at,
-            x-santati-delivery-count, x-santati-stream-id, x-santati-stream-name.'
+            and refused: content-encoding, content-type, user-agent, webhook-id, webhook-signature,
+            webhook-timestamp, x-santati-delivered-at, x-santati-delivery-count, x-santati-stream-id,
+            x-santati-stream-name.'
         timeout_seconds:
           type: integer
           maximum: 60
           minimum: 1
-          default: 10
+          default: 15
           description: Request timeout in seconds, 1 to 60.
       required:
       - url
@@ -2804,7 +4945,8 @@ components:
         state.'
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
           description: Stream id, used in the stream's URL.
         name:
@@ -3007,7 +5149,7 @@ components:
           items:
             type: string
             maxLength: 255
-          description: 'Actor types to forward: user, system or anonymous.'
+          description: 'Actor types to forward: user, system, agent or anonymous.'
         organization_ids:
           type: array
           items:
@@ -3043,7 +5185,7 @@ components:
             type: string
             minLength: 1
             maxLength: 255
-          description: 'Actor types to forward: user, system or anonymous.'
+          description: 'Actor types to forward: user, system, agent or anonymous.'
         organization_ids:
           type: array
           items:
@@ -3058,6 +5200,33 @@ components:
             $ref: '#/components/schemas/MatchRuleClauseRequest'
           description: Metadata clauses an event must satisfy; at most 20.
           maxItems: 20
+    OcsfMapping:
+      type: object
+      properties:
+        version:
+          type: string
+          readOnly: true
+          description: The OCSF release the mapping targets, e.g. 1.9.0.
+        class_uid:
+          type: integer
+          readOnly: true
+          description: The OCSF class the action maps to.
+        activity_id:
+          type: integer
+          readOnly: true
+          description: The class's activity_id enum value; 99 is Other, a best fit
+            rather than exact.
+        status_id:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: 'The OCSF status_id the outcome sets: 2 for a failure, null
+            when the action sets none.'
+      required:
+      - activity_id
+      - class_uid
+      - status_id
+      - version
     OpEnum:
       enum:
       - eq
@@ -3072,10 +5241,10 @@ components:
       type: object
       properties:
         id:
-          type: integer
+          type: string
+          format: uuid
           readOnly: true
-          description: Organization id, the integer an event envelope's organization_id
-            refers to.
+          description: Organization id.
         external_id:
           type: string
           readOnly: true
@@ -3154,6 +5323,27 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/EventDefinition'
+    PaginatedEventSchemaVersionList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cD00ODY%3D
+          description: URL of the next page of results, or null on the last page.
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: https://api.santati.io/api/v0/event-definitions/invoice.voided/schema-versions/?cursor=cj0xJnA9NDg3
+          description: URL of the previous page of results, or null on the first page.
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventSchemaVersion'
     PaginatedLogStreamList:
       type: object
       required:
@@ -3196,6 +5386,33 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Organization'
+    PatchedEventDefinitionWriteRequest:
+      type: object
+      description: The writable part of a definition, for create and (partially) for
+        update.
+      properties:
+        action:
+          type: string
+          minLength: 1
+          description: 'The action name, e.g. invoice.voided: dotted segments of letters,
+            digits, ''-'' and ''_''. Sending a new value on an update renames the
+            action; its schema versions go with it.'
+          maxLength: 255
+        description:
+          type: string
+          description: What this action means, for the people reading the catalog.
+        allowed_target_types:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 64
+          description: Target types an event with this action may name; empty means
+            any target type.
+        is_active:
+          type: boolean
+          description: True while the action is in force. A definition that is not
+            active is treated as undefined when a team has any definitions at all.
     PatchedLogStreamWriteRequest:
       type: object
       description: Create or edit a stream together with its destination, in one payload.
@@ -3255,6 +5472,222 @@ components:
         * `hash_mismatch` - hash_mismatch
         * `prev_hash_mismatch` - prev_hash_mismatch
         * `seq_gap` - seq_gap
+    SchemaCheck:
+      type: object
+      properties:
+        checked:
+          type: integer
+          readOnly: true
+          description: How many of the newest stored events were run.
+        failed:
+          type: integer
+          readOnly: true
+          description: How many of them the document would reject.
+        failures:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaCheckFailure'
+          readOnly: true
+          description: The first failing events, at most 50.
+      required:
+      - checked
+      - failed
+      - failures
+    SchemaCheckFailure:
+      type: object
+      properties:
+        event_id:
+          type: string
+          readOnly: true
+          description: The stored event that fails the document.
+        occurred_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: When the event occurred.
+        field:
+          type: string
+          readOnly: true
+          nullable: true
+          description: The dotted path of the offending value, or null for the root.
+        message:
+          type: string
+          readOnly: true
+          description: What the document rejected.
+      required:
+      - event_id
+      - field
+      - message
+      - occurred_at
+    SchemaVersionStatusEnum:
+      enum:
+      - draft
+      - published
+      - deprecated
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `published` - Published
+        * `deprecated` - Deprecated
+    SigningSecret:
+      type: object
+      description: |-
+        Read shape of a stream's signing secret: the current one and the old one's expiry.
+
+        Read-only, and returned by its own endpoint rather than by the stream read shape:
+        a secret is a credential, so it is never echoed back by a list.
+      properties:
+        signing_secret:
+          type: string
+          readOnly: true
+          description: Current Standard Webhooks signing secret, prefixed whsec_.
+            Every outbound webhook this stream sends is signed with it; store it as
+            a credential.
+        previous_signing_secret_expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the secret in use before the last rotation stops verifying.
+            Null when no rotation has happened, or once the 24-hour overlap has elapsed.
+      required:
+      - previous_signing_secret_expires_at
+      - signing_secret
+    StandardEvent:
+      type: object
+      properties:
+        action:
+          type: string
+          readOnly: true
+          description: The action name, e.g. agent.tool.called.
+        description:
+          type: string
+          readOnly: true
+          description: What the action means.
+        target_types:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Target types installed as the action's allowed target types;
+            empty means any.
+        required_metadata:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Metadata keys every event with this action must carry.
+        optional_metadata:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Metadata keys the schema declares as strings but does not require.
+        schema:
+          readOnly: true
+          description: The JSON Schema 2020-12 document installed as the action's
+            published v1.
+        ocsf:
+          allOf:
+          - $ref: '#/components/schemas/OcsfMapping'
+          readOnly: true
+          description: The action's OCSF class and activity.
+      required:
+      - action
+      - description
+      - ocsf
+      - optional_metadata
+      - required_metadata
+      - schema
+      - target_types
+    StandardEventCatalog:
+      type: object
+      properties:
+        packs:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandardPack'
+          readOnly: true
+          description: Every standard pack.
+      required:
+      - packs
+    StandardPack:
+      type: object
+      properties:
+        slug:
+          type: string
+          readOnly: true
+          description: Stable identifier of the pack.
+        name:
+          type: string
+          readOnly: true
+          description: Display name of the pack.
+        description:
+          type: string
+          readOnly: true
+          description: What the pack covers.
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandardEvent'
+          readOnly: true
+          description: The pack's actions.
+      required:
+      - description
+      - events
+      - name
+      - slug
+    StandardPackInstallRequest:
+      type: object
+      properties:
+        packs:
+          type: array
+          items:
+            $ref: '#/components/schemas/StandardPackSlugEnum'
+          description: The slugs of the standard packs to install, as listed by the
+            standard catalog.
+      required:
+      - packs
+    StandardPackInstallResult:
+      type: object
+      properties:
+        created:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Actions defined now, each with a published v1.
+        skipped:
+          type: array
+          items:
+            type: string
+          readOnly: true
+          description: Actions the team already defined; they are left untouched.
+      required:
+      - created
+      - skipped
+    StandardPackSlugEnum:
+      enum:
+      - identity
+      - organizations
+      - access-control
+      - credentials
+      - configuration
+      - enterprise-identity
+      - privileged-access
+      - agents
+      - mcp
+      type: string
+      description: |-
+        * `identity` - Authentication & sessions
+        * `organizations` - Users & organizations
+        * `access-control` - Roles & permissions
+        * `credentials` - API keys, apps & secrets
+        * `configuration` - Settings & security policy
+        * `enterprise-identity` - SSO, directory sync & domains
+        * `privileged-access` - Impersonation & support access
+        * `agents` - AI agents
+        * `mcp` - MCP servers
     StreamDestination:
       type: object
       description: Read shape for a destination. Never includes ``auth``.
@@ -3313,7 +5746,8 @@ tags:
     report.
 - name: event-definitions
   x-displayName: Event definitions
-  description: The event actions defined in a team's schema catalog.
+  description: The event actions defined in a team's schema catalog, their JSON Schema
+    versions, and the standard packs that seed them.
 - name: exports
   x-displayName: Exports
   description: Export matching audit events to a CSV or JSON Lines file.

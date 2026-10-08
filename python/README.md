@@ -37,6 +37,17 @@ with santati.Santati("sat_sk_...", trail="billing") as client:
 
     for event in client.events.iterate(trail="billing", limit=100):
         print(event.id)
+
+    # Pin an emit to one published schema version of the action.
+    client.events.emit("invoice.voided", organization_id="org_acme", schema_version=2)
+
+    # Manage event definitions and their JSON Schema versions.
+    client.schemas.create_definition("invoice.voided", allowed_target_types=["invoice"])
+    draft = client.schemas.create_version("invoice.voided", {"type": "object"})
+    client.schemas.update_version(
+        "invoice.voided", draft.schema_version.version, {"type": "object"}, if_match=draft.etag
+    )
+    client.schemas.publish_version("invoice.voided", draft.schema_version.version)
 ```
 
 ## Client options
@@ -91,14 +102,19 @@ other failure drops it. Implement `santati.OutboxStore` (`enqueue`, `claim`,
 ## Errors
 
 Every failure raises a subclass of `santati.SantatiError`: `ValidationError`,
-`AuthError`, `NotFoundError`, `RateLimitedError`, `ServerError`,
-`TransportError`, `ApiError` or `OutboxError`. Each carries `status`, `code`,
-`field`, `retry_after` and `message`; `status` is `None` for local validation
-failures, transport errors and outbox errors.
+`SchemaValidationError`, `AuthError`, `NotFoundError`, `RateLimitedError`,
+`ServerError`, `TransportError`, `ApiError` or `OutboxError`. Each carries
+`status`, `code`, `field`, `retry_after` and `message`; `status` is `None` for
+local validation failures, transport errors and outbox errors.
+`SchemaValidationError` (a subclass of `ValidationError`) is a 400, 413 or 422
+whose code is `schema_validation_failed`: the event broke the action's schema,
+named a disallowed target type, or pinned an unusable `schema_version`.
 
-`AuditEvent`, `EventActor` and `EventTarget` are the generated read models,
-re-exported from the package root. See `docs/sdk-surface.md` in the repository
-for the surface every Santati SDK implements.
+`AuditEvent`, `EventActor`, `EventTarget` and the schema models
+(`EventDefinition`, `EventSchemaVersion`, `SchemaCheck`, `StandardEventCatalog`, …)
+are the generated read models, re-exported from the package root. See
+`docs/sdk-surface.md` in the repository for the surface every Santati SDK
+implements.
 
 ## Framework integrations
 

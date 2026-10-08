@@ -51,6 +51,7 @@ interface WireEvent {
   context?: Record<string, unknown>;
   created_at?: string;
   idempotency_key?: string;
+  schema_version?: number;
 }
 
 interface WireParams {
@@ -94,6 +95,13 @@ interface Case {
     events?: WireEvent[];
     params?: WireParams;
     hooks?: Hooks;
+    action?: string;
+    version?: number;
+    definition?: { action: string; description?: string; allowed_target_types?: string[]; is_active?: boolean };
+    changes?: { new_action?: string; description?: string; allowed_target_types?: string[]; is_active?: boolean };
+    schema?: Record<string, unknown>;
+    if_match?: string;
+    packs?: string[];
   };
   expect: Expect;
 }
@@ -131,6 +139,7 @@ const ERROR_KINDS: Record<string, unknown> = {
   TransportError: santati.TransportError,
   ApiError: santati.ApiError,
   OutboxError: santati.OutboxError,
+  SchemaValidationError: santati.SchemaValidationError,
 };
 
 /** The `$generated` values bound so far: one label, one value, per case. */
@@ -281,6 +290,7 @@ function eventInput(raw: WireEvent = {}): santati.EventInput {
     context: raw.context,
     createdAt: raw.created_at,
     idempotencyKey: raw.idempotency_key,
+    schemaVersion: raw.schema_version,
   };
 }
 
@@ -313,9 +323,15 @@ function emitResult(r: santati.EmitResult): unknown {
   };
 }
 
+/** A SchemaVersionResult in the vector's wire shape. */
+function versionResult(r: santati.SchemaVersionResult): unknown {
+  return { schema_version: santati.EventSchemaVersionToJSON(r.schemaVersion), etag: r.etag };
+}
+
 /** Runs the case's operation and returns it in the vector's wire shape. */
 async function dispatch(c: Case, requests: Recorded[]): Promise<unknown> {
   const gateway = await startGateway(c.input.gateway, requests);
+  const action = c.input.action ?? "";
   try {
     const outcomes: Outcome[] = [];
     const client = makeClient(
@@ -368,6 +384,86 @@ async function dispatch(c: Case, requests: Recorded[]): Promise<unknown> {
         if (failure !== undefined) throw failure;
         return { results, outcomes };
       }
+      case "list_definitions": {
+        const page = await client.schemas.listDefinitions(c.input.params);
+        return {
+          results: page.results.map(santati.EventDefinitionToJSON),
+          next_cursor: page.nextCursor,
+        };
+      }
+      case "iterate_definitions": {
+        const definitions: unknown[] = [];
+        for await (const definition of client.schemas.iterateDefinitions(c.input.params)) {
+          definitions.push(santati.EventDefinitionToJSON(definition));
+        }
+        return definitions;
+      }
+      case "get_definition":
+        return santati.EventDefinitionToJSON(await client.schemas.getDefinition(action));
+      case "create_definition": {
+        const definition = c.input.definition ?? { action: "" };
+        return santati.EventDefinitionToJSON(
+          await client.schemas.createDefinition({
+            action: definition.action,
+            description: definition.description,
+            allowedTargetTypes: definition.allowed_target_types,
+            isActive: definition.is_active,
+          }),
+        );
+      }
+      case "update_definition": {
+        const changes = c.input.changes ?? {};
+        return santati.EventDefinitionToJSON(
+          await client.schemas.updateDefinition(action, {
+            newAction: changes.new_action,
+            description: changes.description,
+            allowedTargetTypes: changes.allowed_target_types,
+            isActive: changes.is_active,
+          }),
+        );
+      }
+      case "delete_definition":
+        await client.schemas.deleteDefinition(action);
+        return null;
+      case "list_versions": {
+        const page = await client.schemas.listVersions(action, c.input.params);
+        return {
+          results: page.results.map(santati.EventSchemaVersionToJSON),
+          next_cursor: page.nextCursor,
+        };
+      }
+      case "iterate_versions": {
+        const versions: unknown[] = [];
+        for await (const version of client.schemas.iterateVersions(action, c.input.params)) {
+          versions.push(santati.EventSchemaVersionToJSON(version));
+        }
+        return versions;
+      }
+      case "get_version":
+        return versionResult(await client.schemas.getVersion(action, c.input.version ?? 0));
+      case "create_version":
+        return versionResult(await client.schemas.createVersion(action, c.input.schema ?? {}));
+      case "update_version":
+        return versionResult(
+          await client.schemas.updateVersion(action, c.input.version ?? 0, c.input.schema ?? {}, {
+            ifMatch: c.input.if_match,
+          }),
+        );
+      case "delete_version":
+        await client.schemas.deleteVersion(action, c.input.version ?? 0);
+        return null;
+      case "publish_version":
+        return versionResult(await client.schemas.publishVersion(action, c.input.version ?? 0));
+      case "deprecate_version":
+        return versionResult(await client.schemas.deprecateVersion(action, c.input.version ?? 0));
+      case "check_schema":
+        return santati.SchemaCheckToJSON(await client.schemas.checkSchema(action, c.input.schema ?? {}));
+      case "list_standard_packs":
+        return santati.StandardEventCatalogToJSON(await client.schemas.listStandardPacks());
+      case "install_standard_packs":
+        return santati.StandardPackInstallResultToJSON(
+          await client.schemas.installStandardPacks(c.input.packs ?? []),
+        );
       default:
         return assert.fail(`unknown conformance operation ${c.operation}`);
     }

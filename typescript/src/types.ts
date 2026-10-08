@@ -1,5 +1,5 @@
 /** The facade's public shapes. Wire (snake_case) names are the generated core's job. */
-import type { AuditEvent } from "./core/index.js";
+import type { AuditEvent, EventDefinition, EventSchemaVersion } from "./core/index.js";
 
 /** Who acted on an event. */
 export interface ActorInput {
@@ -29,6 +29,12 @@ export interface EventInput {
   context?: Record<string, unknown>;
   createdAt?: string;
   idempotencyKey?: string;
+  /**
+   * Pins the event to one published schema version of its action; an integer,
+   * forwarded unchanged and never validated here. Absent means the newest
+   * published, not deprecated, version.
+   */
+  schemaVersion?: number;
 }
 
 /** Filters for `list` and `iterate`; absent members are not sent. */
@@ -88,6 +94,49 @@ export interface BatchResult {
 export interface EventPage {
   results: AuditEvent[];
   nextCursor: string | null;
+}
+
+/** `limit` and `cursor` of a page of definitions or schema versions; absent members are not sent. */
+export interface PageParams {
+  limit?: number;
+  cursor?: string;
+}
+
+/** `iterate*` takes the same parameters minus `cursor`: pages are followed for you. */
+export type IteratePageParams = Omit<PageParams, "cursor">;
+
+/** The definition to create; absent members are not sent. */
+export interface DefinitionInput {
+  action: string;
+  description?: string;
+  allowedTargetTypes?: string[];
+  isActive?: boolean;
+}
+
+/** The changes to a definition; absent members are not sent, `newAction` renames it. */
+export interface DefinitionUpdate {
+  newAction?: string;
+  description?: string;
+  allowedTargetTypes?: string[];
+  isActive?: boolean;
+}
+
+/** One page of event definitions and the cursor that reads the next one. */
+export interface DefinitionPage {
+  results: EventDefinition[];
+  nextCursor: string | null;
+}
+
+/** One page of an action's schema versions and the cursor that reads the next one. */
+export interface SchemaVersionPage {
+  results: EventSchemaVersion[];
+  nextCursor: string | null;
+}
+
+/** A schema version and the `ETag` the response carried (null when absent), to send back as `ifMatch`. */
+export interface SchemaVersionResult {
+  schemaVersion: EventSchemaVersion;
+  etag: string | null;
 }
 
 /** One entry an `OutboxStore` hands to the worker: its store id and the stored event. */

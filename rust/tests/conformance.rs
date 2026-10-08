@@ -12,7 +12,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use libtest_mimic::{Arguments, Failed, Trial};
-use santati::{AuditEvent, EmitResult, Error, EventInput, Events, ListParams, Santati, StreamExt};
+use santati::{
+    AuditEvent, DefinitionInput, DefinitionUpdate, EmitResult, Error, EventInput, Events,
+    ListParams, PageParams, Santati, StreamExt,
+};
 use serde_json::{json, Map, Value};
 use wiremock::matchers::any;
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
@@ -274,12 +277,15 @@ async fn drive(case: &Value, gateway: &Gateway) -> Result<(), Failed> {
                 "iterate" => collect(events, list_params(&input["params"]))
                     .await
                     .map(|events| json!(events)),
-                operation => {
-                    return Err(Failed::from(format!(
-                        "{}: unknown operation {operation}",
-                        case_id(case)
-                    )))
-                }
+                operation => match schema_operation(client, operation, input).await {
+                    Some(outcome) => outcome,
+                    None => {
+                        return Err(Failed::from(format!(
+                            "{}: unknown operation {operation}",
+                            case_id(case)
+                        )))
+                    }
+                },
             }
         }
     };
@@ -685,6 +691,10 @@ fn event_input(value: &Value) -> EventInput {
     input.organization_id = string_field(members, "organization_id");
     input.created_at = string_field(members, "created_at");
     input.idempotency_key = string_field(members, "idempotency_key");
+    input.schema_version = members
+        .get("schema_version")
+        .and_then(Value::as_i64)
+        .map(|version| version as i32);
     input.actor = members
         .get("actor")
         .and_then(Value::as_object)
@@ -758,5 +768,186 @@ fn string_map(members: &Map<String, Value>, key: &str) -> Option<HashMap<String,
             .iter()
             .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_string())))
             .collect()
+    })
+}
+
+/// Schema vectors: the page selectors of `params`.
+fn page_params(value: &Value) -> PageParams {
+    PageParams {
+        limit: value
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map(|limit| limit as u32),
+        cursor: value
+            .get("cursor")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+    }
+}
+
+/// A schema vector's `definition` or `changes` member: only the members present.
+struct WireDefinition {
+    action: Option<String>,
+    new_action: Option<String>,
+    description: Option<String>,
+    allowed_target_types: Option<Vec<String>>,
+    is_active: Option<bool>,
+}
+
+fn wire_definition(value: &Value) -> WireDefinition {
+    let members = value.as_object();
+    let text = |key: &str| members.and_then(|m| string_field(m, key));
+    WireDefinition {
+        action: text("action"),
+        new_action: text("new_action"),
+        description: text("description"),
+        allowed_target_types: members
+            .and_then(|m| m.get("allowed_target_types"))
+            .and_then(Value::as_array)
+            .map(|types| {
+                types
+                    .iter()
+                    .filter_map(|item| item.as_str().map(str::to_string))
+                    .collect()
+            }),
+        is_active: members
+            .and_then(|m| m.get("is_active"))
+            .and_then(Value::as_bool),
+    }
+}
+
+async fn collect_all<T: serde::Serialize>(
+    stream: impl futures_util::Stream<Item = Result<T, Error>>,
+) -> Result<Value, Error> {
+    let mut stream = pin!(stream);
+    let mut items = Vec::new();
+    while let Some(item) = stream.next().await {
+        items.push(item?);
+    }
+    Ok(json!(items))
+}
+
+fn version_json(result: santati::SchemaVersionResult) -> Value {
+    json!({"schema_version": result.schema_version, "etag": result.etag})
+}
+
+/// Run one of the schema operations and render it in the vector's wire shape;
+/// `None` when `operation` is not one of them.
+async fn schema_operation(
+    client: &Santati,
+    operation: &str,
+    input: &Value,
+) -> Option<Result<Value, Error>> {
+    let schemas = client.schemas();
+    let action = input
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let version = input
+        .get("version")
+        .and_then(Value::as_i64)
+        .unwrap_or_default() as i32;
+    let schema = || {
+        input
+            .get("schema")
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let page = || page_params(&input["params"]);
+    Some(match operation {
+        "list_definitions" => schemas
+            .list_definitions(page())
+            .await
+            .map(|page| json!({"results": page.results, "next_cursor": page.next_cursor})),
+        "iterate_definitions" => collect_all(schemas.iterate_definitions(page())).await,
+        "get_definition" => schemas.get_definition(action).await.map(|d| json!(d)),
+        "create_definition" => {
+            let wire = wire_definition(&input["definition"]);
+            schemas
+                .create_definition(DefinitionInput {
+                    action: wire.action.unwrap_or_default(),
+                    description: wire.description,
+                    allowed_target_types: wire.allowed_target_types,
+                    is_active: wire.is_active,
+                })
+                .await
+                .map(|d| json!(d))
+        }
+        "update_definition" => {
+            let wire = wire_definition(&input["changes"]);
+            schemas
+                .update_definition(
+                    action,
+                    DefinitionUpdate {
+                        new_action: wire.new_action,
+                        description: wire.description,
+                        allowed_target_types: wire.allowed_target_types,
+                        is_active: wire.is_active,
+                    },
+                )
+                .await
+                .map(|d| json!(d))
+        }
+        "delete_definition" => schemas
+            .delete_definition(action)
+            .await
+            .map(|()| Value::Null),
+        "list_versions" => schemas
+            .list_versions(action, page())
+            .await
+            .map(|page| json!({"results": page.results, "next_cursor": page.next_cursor})),
+        "iterate_versions" => collect_all(schemas.iterate_versions(action, page())).await,
+        "get_version" => schemas.get_version(action, version).await.map(version_json),
+        "create_version" => schemas
+            .create_version(action, schema())
+            .await
+            .map(version_json),
+        "update_version" => schemas
+            .update_version(
+                action,
+                version,
+                schema(),
+                input.get("if_match").and_then(Value::as_str),
+            )
+            .await
+            .map(version_json),
+        "delete_version" => schemas
+            .delete_version(action, version)
+            .await
+            .map(|()| Value::Null),
+        "publish_version" => schemas
+            .publish_version(action, version)
+            .await
+            .map(version_json),
+        "deprecate_version" => schemas
+            .deprecate_version(action, version)
+            .await
+            .map(version_json),
+        "check_schema" => schemas
+            .check_schema(action, schema())
+            .await
+            .map(|check| json!(check)),
+        "list_standard_packs" => schemas
+            .list_standard_packs()
+            .await
+            .map(|catalog| json!(catalog)),
+        "install_standard_packs" => {
+            let packs = input
+                .get("packs")
+                .and_then(Value::as_array)
+                .map(|packs| {
+                    packs
+                        .iter()
+                        .filter_map(|pack| pack.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            schemas
+                .install_standard_packs(packs)
+                .await
+                .map(|result| json!(result))
+        }
+        _ => return None,
     })
 }

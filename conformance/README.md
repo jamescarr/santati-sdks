@@ -22,7 +22,12 @@ and the registry and then runs each SDK's native runner.
 {
   "id": "globally-unique-string",   // the test name every SDK registers
   "feature": "<features[].id>",
-  "operation": "emit" | "emit_batch" | "list" | "iterate" | "emit_outbox",
+  "operation": "emit" | "emit_batch" | "list" | "iterate" | "emit_outbox"
+             | "list_definitions" | "iterate_definitions" | "get_definition" | "create_definition"
+             | "update_definition" | "delete_definition" | "list_versions" | "iterate_versions"
+             | "get_version" | "create_version" | "update_version" | "delete_version"
+             | "publish_version" | "deprecate_version" | "check_schema"
+             | "list_standard_packs" | "install_standard_packs",
   "input": {
     "client": { "api_key": "sat_sk_…", "trail"?, "timeout_ms"?, "max_retries"?,
                 "initial_backoff_ms"?, "max_backoff_ms"?, "headers"?, "base_path"?,
@@ -31,6 +36,11 @@ and the registry and then runs each SDK's native runner.
     "gateway": Gateway,
     // operation-specific:
     "event"? | "events"? | "params"?,
+    // schema operations only (each operation reads the keys it needs):
+    //   "action" (string), "version" (int), "params" ({limit?, cursor?}; iterate: {limit?}),
+    //   "definition" ({action, description?, allowed_target_types?, is_active?}),
+    //   "changes" ({new_action?, description?, allowed_target_types?, is_active?}),
+    //   "schema" (object), "if_match" (string, update_version), "packs" ([string])
     "hooks"?   // emit_outbox only, see "The emit_outbox operation"
   },
   "expect": {
@@ -69,6 +79,13 @@ sleeps after recording the request and before the status line.
   generated model's own serializer back to wire (snake_case) JSON. Comparison
   is deep equality after removing every object member whose value is null,
   recursively, on both sides.
+  The schema operations answer: the list operations `{"results", "next_cursor"}`
+  (`next_cursor` the decoded cursor or null); the iterate operations `[…]`; the
+  definition operations the wire `EventDefinition`; the version operations
+  `{"schema_version": <wire EventSchemaVersion>, "etag"}` (`etag` the `ETag`
+  header verbatim or null); `check_schema`, `list_standard_packs` and
+  `install_standard_packs` the wire model; `delete_definition` and
+  `delete_version` `null`.
 - `error`: `kind` is compared by exact type (no subclass matching) through the
   runner's fixed kind table; each other key present (`status`, `code`, `field`,
   `retry_after`) is compared exactly. `message` is never compared.

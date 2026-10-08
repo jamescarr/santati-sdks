@@ -23,6 +23,12 @@ module Santati
   # A local validation failure, or an HTTP 400, 413 or 422.
   class ValidationError < Error; end
 
+  # An HTTP 400, 413 or 422 whose code is `schema_validation_failed`: the event
+  # broke the action's JSON Schema, named a disallowed target type, or pinned an
+  # unusable `schema_version`. A {ValidationError}, so `rescue ValidationError`
+  # still catches it.
+  class SchemaValidationError < ValidationError; end
+
   # HTTP 401 or 403.
   class AuthError < Error; end
 
@@ -57,6 +63,11 @@ module Santati
     end
   end
 
+  # The kind of a 400, 413 or 422 whose body carried `code`.
+  def self.validation_class_for(code)
+    (code == "schema_validation_failed") ? SchemaValidationError : ValidationError
+  end
+
   # Translate a failure raised by the generated core into a {Santati::Error}.
   # A generated `ApiError` without a status means the request never produced an
   # HTTP response, so it becomes a {TransportError}.
@@ -66,7 +77,9 @@ module Santati
 
     status = status.to_i
     code, field, message = parse_error_body(error.response_body)
-    error_class_for(status).new(
+    error_class = error_class_for(status)
+    error_class = validation_class_for(code) if error_class == ValidationError
+    error_class.new(
       message || "HTTP #{status}",
       status: status,
       code: code,

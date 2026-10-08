@@ -20,7 +20,7 @@ parameter). Language-specific framework integrations (Python's
 |option|default|meaning|
 |---|---|---|
 |`api_key`|required, non-empty|team API key (`sat_sk_…`)|
-|`base_url`|`https://api.santati.io`|trailing `/` removed; may carry a path prefix. Requests go to `<base_url>/api/v0/events/`|
+|`base_url`|`https://api.santati.io`|trailing `/` removed; may carry a path prefix. Requests go to `<base_url>/api/v0/events/`, `<base_url>/api/v0/event-definitions/…` and `<base_url>/api/v0/standard-events/…`|
 |`trail`|none|default trail for emits; **never** applied to reads|
 |`timeout_ms`|`10000`|per attempt|
 |`max_retries`|`2`|retries after the first attempt|
@@ -50,7 +50,7 @@ case-insensitively (field `headers`), a `batch_size` outside `1..500` (field
 
 ## Operations
 
-### `emit(event, trail?, organization_id?, actor?, targets?, metadata?, data?, context?, created_at?, idempotency_key?) → EmitResult`
+### `emit(event, trail?, organization_id?, actor?, targets?, metadata?, data?, context?, created_at?, idempotency_key?, schema_version?) → EmitResult`
 
 Local validation before any request: an empty `event` → `ValidationError` with
 field `event`; the resolved trail (the event's, else the client's) empty or
@@ -66,6 +66,13 @@ never sent. `created_at` is an RFC 3339 string forwarded verbatim. `actor` is
 The `Idempotency-Key` header is never sent (the envelope key wins on the server
 and the header is unsafe for batches).
 
+`schema_version` is an integer forwarded unchanged and never validated locally:
+the server answers an unusable pin (an unknown, draft or expired version) with
+`400` and code `schema_validation_failed`. Absent or null omits it, and the
+server then validates against the newest published, not deprecated, version of
+the action; Go treats `0` as absent. The same member rides on every
+`emit_batch` item and on the outbox's stored event.
+
 `POST /api/v0/events/`:
 
 - `201` → `EmitResult{event: AuditEvent, duplicate: false, idempotency_key, queued: false}`
@@ -78,8 +85,9 @@ delivery](#outbox-delivery-emit-with-an-outbox).
 ### `emit_batch(events) → BatchResult`
 
 An empty list → `ValidationError` field `events`. Per item the `emit` rules
-with fields `events[<i>].event` and `events[<i>].trail`; the first failing item
-wins. Body `{"events": [envelope…]}`, one generated key per item lacking one.
+(`schema_version` included) with fields `events[<i>].event` and
+`events[<i>].trail`; the first failing item wins. Body `{"events":
+[envelope…]}`, one generated key per item lacking one.
 
 - `202` or `207` → `BatchResult{accepted, rejected, results: [BatchItem{index,
   status: accepted|duplicate|rejected, id?, error?: BatchItemError{code,
@@ -102,6 +110,60 @@ URL, or null when `next` is null or carries no `cursor`.
 A lazy sequence of `AuditEvent`: calls `list` with the same parameters plus
 `cursor = next_cursor` until `next_cursor` is null. An error on a later page is
 raised after the earlier events were yielded.
+
+### Schemas
+
+The `schemas` resource manages event definitions, their schema versions and
+the standard packs. A schema version is a JSON Schema 2020-12 document
+(`draft` → `published` → `deprecated`) that validates an action's `metadata`,
+`actor.metadata` and `targets[].metadata`. `action` and `schema` are forwarded
+as given, the way `emit` forwards the event name.
+
+Local validation: an empty `action` (the path parameter of every operation that
+has one, the version lists and iterators included, and `create_definition`'s
+`action`) → `ValidationError` field `action`, status null, no request. Nothing
+else is checked locally: pack slugs, `version`, `new_action` and the contents
+of `schema` are forwarded and the server decides. `action` is sent as one URL
+path segment, percent-encoded by the generated core (Rust and Elixir encode it
+themselves); the vectors use only characters every encoder leaves alone.
+Bodies carry only the members the caller supplied; `null` is never sent.
+
+The expected 2xx status below is the only success; any other 2xx, or a 2xx body
+that does not decode, → `ApiError`. A non-2xx body maps exactly as for events,
+including Django's field-error bodies (`{"field": ["msg"]}`: `code` and `field`
+null, `message = "HTTP <status>"`). `409` (a published version cannot be
+deleted, say) and `412` (a stale `If-Match`) → `ApiError`.
+
+Retries follow [Retries](#retries) for every operation **except
+`create_version`, which makes exactly one attempt**: repeating it would create
+a second draft.
+
+`etag` is the response `ETag` header verbatim (quotes included), or null.
+Pages decode `next_cursor` exactly like `list`: the `cursor` query parameter of
+`next`, or null.
+
+|operation|request|success|
+|---|---|---|
+|`list_definitions(limit?, cursor?) → DefinitionPage{results: [EventDefinition], next_cursor}`|`GET /api/v0/event-definitions/` (`cursor`, `limit`, in that order)|200|
+|`iterate_definitions(limit?)` → lazy `EventDefinition`|as `iterate`|—|
+|`get_definition(action) → EventDefinition`|`GET /api/v0/event-definitions/{action}/`|200|
+|`create_definition(action, description?, allowed_target_types?, is_active?) → EventDefinition`|`POST /api/v0/event-definitions/`, body `{action, description?, allowed_target_types?, is_active?}`|201|
+|`update_definition(action, new_action?, description?, allowed_target_types?, is_active?) → EventDefinition`|`PATCH /api/v0/event-definitions/{action}/`; body the supplied members only, `new_action` sent as `action`; `{}` when none|200|
+|`delete_definition(action) → nothing`|`DELETE /api/v0/event-definitions/{action}/`|204|
+|`list_versions(action, limit?, cursor?) → SchemaVersionPage{results: [EventSchemaVersion], next_cursor}`|`GET /api/v0/event-definitions/{action}/schema-versions/`|200|
+|`iterate_versions(action, limit?)` → lazy `EventSchemaVersion`|as `iterate`|—|
+|`get_version(action, version) → SchemaVersionResult{schema_version: EventSchemaVersion, etag}`|`GET …/{action}/schema-versions/{version}/`|200|
+|`create_version(action, schema) → SchemaVersionResult`|`POST …/{action}/schema-versions/`, body `{"schema": schema}`; **no retries**|201|
+|`update_version(action, version, schema, if_match?) → SchemaVersionResult`|`PUT …/{action}/schema-versions/{version}/`, body `{"schema": schema}`, an `If-Match` header only when `if_match` is given|200|
+|`delete_version(action, version) → nothing`|`DELETE …/{action}/schema-versions/{version}/`|204|
+|`publish_version(action, version) → SchemaVersionResult`|`POST …/{action}/schema-versions/{version}/publish/` (no body)|200|
+|`deprecate_version(action, version) → SchemaVersionResult`|`POST …/{action}/schema-versions/{version}/deprecate/` (no body)|200|
+|`check_schema(action, schema) → SchemaCheck`|`POST …/{action}/schema-versions/check/`, body `{"schema": schema}`; a dry run against the action's stored events|200|
+|`list_standard_packs() → StandardEventCatalog`|`GET /api/v0/standard-events/`|200|
+|`install_standard_packs(packs) → StandardPackInstallResult`|`POST /api/v0/standard-events/install/`, body `{"packs": packs}`|200|
+
+PHP cannot tell an empty JSON object from an empty array: a nested empty object
+inside a `schema` must be passed as `\stdClass`.
 
 ### Outbox delivery (emit with an outbox)
 
@@ -262,7 +324,8 @@ pass():
 `outcome(item)`: `accepted`/`duplicate` → `{status, id: item.id}`; `rejected`
 → `{status: rejected, error: ValidationError{status: <the batch response's
 HTTP status, 202 or 207>, code: item.error.code, field: item.error.field,
-message: item.error.message}}`.
+message: item.error.message}}`, a `SchemaValidationError` (same fields) when
+`item.error.code == "schema_validation_failed"`.
 
 Store failures inside a tick are swallowed by the worker (the next tick
 retries); inside `flush()` they raise. Any other unexpected exception in a tick
@@ -297,14 +360,15 @@ hook call) or a Rust panic (`std::panic::catch_unwind` around each hook call).
 
 ## Errors
 
-One base type, eight kinds, each with `status` (int|null), `code`
+One base type, nine kinds, each with `status` (int|null), `code`
 (string|null), `field` (string|null), `retry_after` (int seconds|null) and
 `message`:
 
 |condition|kind|
 |---|---|
 |local validation|`ValidationError` (status null)|
-|HTTP 400, 413, 422|`ValidationError`|
+|HTTP 400, 413, 422 (any `code` but the next row's)|`ValidationError`|
+|HTTP 400, 413, 422 whose body `code` is `schema_validation_failed`|`SchemaValidationError`|
 |HTTP 401, 403|`AuthError`|
 |HTTP 404|`NotFoundError`|
 |HTTP 429|`RateLimitedError`|
@@ -323,6 +387,14 @@ object with a string `detail` → `message = detail`; otherwise `message =
 "HTTP <status>"`. `retry_after` is the integer value of `Retry-After` when it
 matches `^\d+$`, else null.
 
+`SchemaValidationError` is the one kind the body decides: the server answers it
+when an event fails the action's JSON Schema, names a disallowed target type,
+or pins a `schema_version` it cannot use. It is not retryable. Python,
+TypeScript, Ruby and PHP make it a subclass of `ValidationError`, so a handler
+for the parent still catches it; Go, Rust and Elixir have no subtyping, so a
+caller matching only the validation kind must match the new kind too. The
+conformance runners compare kinds by exact type.
+
 ## Retries
 
 Attempts = 1 + `max_retries`. Retryable: transport failures, 500/502/503/504,
@@ -336,9 +408,13 @@ same body, same idempotency keys.
 
 ## Per-language surface
 
-`EmitResult`, `BatchResult`, `BatchItem`, `BatchItemError` and `EventPage` are
-facade types; `AuditEvent`, `EventActor` and `EventTarget` are the generated
-read models, re-exported from the public entry point.
+`EmitResult`, `BatchResult`, `BatchItem`, `BatchItemError`, `EventPage`,
+`DefinitionPage`, `SchemaVersionPage` and `SchemaVersionResult` are facade
+types; `AuditEvent`, `EventActor`, `EventTarget`, `EventDefinition`,
+`EventSchemaVersion`, `SchemaCheck`, `SchemaCheckFailure`,
+`StandardEventCatalog`, `StandardPack`, `StandardEvent`, `OcsfMapping` and
+`StandardPackInstallResult` are the generated read models, re-exported from the
+public entry point.
 
 | |Python|TypeScript|Go|Rust|Elixir|Ruby|PHP|
 |---|---|---|---|---|---|---|---|
@@ -360,6 +436,10 @@ read models, re-exported from the public entry point.
 |redis store|`santati.outbox.redis.RedisOutbox(client: redis.Redis, *, key="santati:outbox", visibility_ms=60000)`, extra `santati[redis]` (`redis>=5`)|`import { RedisOutbox } from "@santati/node/redis"`; `new RedisOutbox(client: ioredis.Redis, {key?, visibilityMs?})`; optional peer dep `ioredis>=5`|`github.com/jamescarr/santati-sdks/go/redisoutbox`: `redisoutbox.New(client redis.Cmdable, opts ...redisoutbox.Option) *redisoutbox.Store`; `WithKey(string)`, `WithVisibility(time.Duration)`; dep `github.com/redis/go-redis/v9`|feature `redis`: `santati::RedisOutbox::new(conn: redis::aio::ConnectionManager)`, `.key(impl Into<String>)`, `.visibility(Duration)`|`Santati.Outbox.Redis`, opts `conn:` (Redix connection or name, required), `key:`, `visibility_ms:`; `{:redix, "~> 1.5", optional: true}`|`require "santati/outbox/redis"`; `Santati::RedisOutbox.new(redis, key: "santati:outbox", visibility_ms: 60_000)` (`redis` gem ≥ 5, not a gemspec dependency)|`new Santati\Outbox\RedisOutbox(\Predis\ClientInterface $client, string $key = 'santati:outbox', int $visibilityMs = 60000)`; composer `suggest` `predis/predis`|
 |wire codec (custom stores)|the stored dict is the wire JSON|`envelopeToWire(e: EventInput): Record<string, unknown>`, `envelopeFromWire(json: unknown): EventInput`|`json.Marshal`/`json.Unmarshal` of `EventInput` (json tags)|`serde_json` on `EventInput` (`Serialize`/`Deserialize`)|the stored map is the wire JSON (string keys)|`JSON.generate(hash)` / `JSON.parse(s, symbolize_names: true)`|`json_encode` / `json_decode($s, true)`|
 |outbox error|`santati.OutboxError`|`OutboxError`|`KindOutbox Kind = "OutboxError"`|`Error::Outbox(ErrorDetails)`, `ErrorKind::Outbox` (`as_str` → `"OutboxError"`)|`Santati.OutboxError`|`Santati::OutboxError`|`Santati\Exception\OutboxException`|
+|schemas resource|`client.schemas`|`santati.schemas`|`client.Schemas` (`*Schemas`)|`client.schemas()` (`Schemas<'_>`)|module `Santati.Schemas`, every function takes the client first|`client.schemas`|`$client->schemas` (public readonly)|
+|schema operations|the 17 operations under their names; optionals are keyword-only (`update_version(action, version, schema, *, if_match=None)`); `iterate_*` return iterators; `DefinitionPage`, `SchemaVersionPage` and `SchemaVersionResult(schema_version, etag)` are frozen dataclasses; `delete_*` return `None`|camelCase (`listDefinitions(params?)`, `createDefinition({action, description?, allowedTargetTypes?, isActive?})`, `updateDefinition(action, {newAction?, description?, allowedTargetTypes?, isActive?})`, `updateVersion(action, version, schema, {ifMatch?})`); `iterate*` are `AsyncGenerator`s; `SchemaVersionResult = {schemaVersion, etag: string \| null}`; `delete*` resolve `void`|`ListDefinitions(ctx, PageParams)`, `CreateDefinition(ctx, DefinitionInput)`, `UpdateDefinition(ctx, action, DefinitionUpdate)`, `GetVersion(ctx, action, version int)`, `UpdateVersion(ctx, action, version, schema, ifMatch string)` (`""` sends no header); `Iterate*` return `iter.Seq2`; `SchemaVersionResult{SchemaVersion, ETag string}` (`""` = no ETag); `Delete*` return `error`|`async fn list_definitions(&self, PageParams)`, `create_definition(&self, DefinitionInput)`, `update_definition(&self, &str, DefinitionUpdate)`, `get_version(&self, &str, i32)`, `update_version(&self, &str, i32, Map, Option<&str>)`; `iterate_*` return `impl Stream`; `SchemaVersionResult {schema_version, etag: Option<String>}`; `delete_*` return `Result<(), Error>`|`list_definitions(client, params \\ [])`, `create_definition(client, map)`, `update_definition(client, action, map)`, `update_version(client, action, version, schema, if_match: etag)`; `stream_definitions/2` and `stream_versions/3` (raise like `stream`); `%Santati.SchemaVersionResult{schema_version, etag}`; `delete_*` → `:ok \| {:error, exception}`|`list_definitions(limit: nil, cursor: nil)`, `create_definition(action:, description: nil, allowed_target_types: nil, is_active: nil)`, `update_version(action, version, schema, if_match: nil)`; `iterate_*` return an `Enumerator`; `SchemaVersionResult = Data.define(:schema_version, :etag)`; `delete_*` return `nil`|`listDefinitions(array $params = [])`, `createDefinition(array $definition)`, `updateDefinition(string $action, array $changes)`, `updateVersion(string $action, int $version, array \| \stdClass $schema, ?string $ifMatch = null)`; `iterate*` return a `\Generator`; `final readonly` `DefinitionPage`, `SchemaVersionPage`, `SchemaVersionResult`; unknown option keys raise `ValidationException`|
+|schema error|`santati.SchemaValidationError` (subclass of `ValidationError`)|`SchemaValidationError extends ValidationError`|`KindSchemaValidation Kind = "SchemaValidationError"`|`Error::SchemaValidation(ErrorDetails)`, `ErrorKind::SchemaValidation` (`as_str` → `"SchemaValidationError"`)|`Santati.SchemaValidationError` (same fields as `ValidationError`; not matched by `%Santati.ValidationError{}`)|`Santati::SchemaValidationError < ValidationError`|`Santati\Exception\SchemaValidationException extends ValidationException`|
+|schema_version|`schema_version=` keyword; `EventInput` key|`schemaVersion?: number`|`EventInput.SchemaVersion int` (`0` = no pin)|`EventInput.schema_version: Option<i32>`|`"schema_version"` key of the event map (integer)|`schema_version:` keyword and hash key|`'schema_version'` array key (integer; a non-integer raises `ValidationException`, field `schema_version`)|
 
 UUIDv4 generation: Python `uuid.uuid4()`, TypeScript `crypto.randomUUID()`, Go
 16 bytes from `crypto/rand` with the version/variant bits set, Rust

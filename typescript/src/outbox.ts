@@ -1,4 +1,12 @@
-import { OutboxError, RateLimitedError, SantatiError, ServerError, TransportError, ValidationError } from "./errors.js";
+import {
+  OutboxError,
+  RateLimitedError,
+  SantatiError,
+  ServerError,
+  TransportError,
+  ValidationError,
+  validationKind,
+} from "./errors.js";
 import type {
   BatchResult,
   EventInput,
@@ -216,7 +224,7 @@ export class OutboxWorker {
             if (item.status === "rejected") {
               await this.notify(target.entry.event, {
                 status: "rejected",
-                error: new ValidationError(item.error?.message ?? "rejected", {
+                error: new (validationKind(item.error?.code))(item.error?.message ?? "rejected", {
                   status,
                   code: item.error?.code,
                   field: item.error?.field,

@@ -6,6 +6,16 @@ All notable changes to `@santati/node` are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `santati.schemas`: event definitions (`listDefinitions`, `iterateDefinitions`, `getDefinition`, `createDefinition`, `updateDefinition`, `deleteDefinition`), their schema versions (`listVersions`, `iterateVersions`, `getVersion`, `createVersion`, `updateVersion` with `ifMatch`, `deleteVersion`, `publishVersion`, `deprecateVersion`, `checkSchema`) and the standard packs (`listStandardPacks`, `installStandardPacks`). `createVersion` is sent once, never retried.
+- `schemaVersion` on `events.emit`, on `emitBatch` items and on queued events, to pin an emit to one published version of the action's schema.
+- `SchemaValidationError`, a subclass of `ValidationError`.
+
+### Changed
+
+- A 400, 413 or 422 whose code is `schema_validation_failed` (and a rejected outbox item with that code) now rejects with `SchemaValidationError`; existing `instanceof ValidationError` checks still match it.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

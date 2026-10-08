@@ -25,6 +25,9 @@ const (
 type Client struct {
 	// Events emits, lists and streams audit events.
 	Events *Events
+	// Schemas manages event definitions, their schema versions and the standard
+	// packs.
+	Schemas *Schemas
 
 	apiKey         string
 	trail          string
@@ -184,6 +187,7 @@ func NewClient(apiKey string, opts ...Option) (*Client, error) {
 		api:            core.NewAPIClient(coreCfg),
 	}
 	c.Events = &Events{client: c}
+	c.Schemas = &Schemas{client: c}
 
 	if cfg.outbox != nil {
 		c.outbox = &outbox{

@@ -3,11 +3,11 @@
 use std::collections::VecDeque;
 
 use futures_util::stream::{self, Stream};
-use reqwest::header::HeaderMap;
-use reqwest::{RequestBuilder, Response};
+use reqwest::RequestBuilder;
 
 use crate::client::Santati;
 use crate::error::Error;
+use crate::http::{cursor_from_url, send};
 use crate::models;
 use crate::outbox;
 use crate::retry::{run as run_with_retries, RetryPolicy};
@@ -255,6 +255,7 @@ impl<'a> Events<'a> {
                     .map(|(key, value)| (key.clone(), value.clone()))
                     .collect()
             }),
+            schema_version: input.schema_version,
         })
     }
 }
@@ -265,32 +266,6 @@ struct Pages {
     cursor: Option<String>,
     done: bool,
     params: ListParams,
-}
-
-/// One response, read to the end so the connection is reusable.
-struct RawResponse {
-    status: u16,
-    headers: HeaderMap,
-    body: Vec<u8>,
-}
-
-async fn send(request: RequestBuilder) -> Result<RawResponse, Error> {
-    let response: Response = request
-        .send()
-        .await
-        .map_err(|error| Error::transport(error.to_string()))?;
-    let status = response.status().as_u16();
-    let headers = response.headers().clone();
-    let body = response
-        .bytes()
-        .await
-        .map_err(|error| Error::transport(error.to_string()))?
-        .to_vec();
-    Ok(RawResponse {
-        status,
-        headers,
-        body,
-    })
 }
 
 /// The query parameters in spec order; absent filters are not sent.
@@ -339,14 +314,6 @@ fn query_pairs(params: &ListParams) -> Vec<(&'static str, String)> {
         pairs.push(("trail", value.clone()));
     }
     pairs
-}
-
-/// The decoded `cursor` of a page's `next` URL, when it carries one.
-fn cursor_from_url(next: &str) -> Option<String> {
-    let url = url::Url::parse(next).ok()?;
-    url.query_pairs()
-        .find(|(key, _)| key == "cursor")
-        .map(|(_, value)| value.into_owned())
 }
 
 fn convert_batch(batch: models::EventBatchResult) -> BatchResult {

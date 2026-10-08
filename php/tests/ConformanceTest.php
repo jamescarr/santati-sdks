@@ -17,7 +17,9 @@ use Santati\Exception\SantatiException;
 use Santati\Exception\ServerException;
 use Santati\Exception\TransportException;
 use Santati\Exception\ValidationException;
+use Santati\Exception\SchemaValidationException;
 use Santati\Outbox\MemoryOutbox;
+use Santati\SchemaVersionResult;
 use Santati\SendOutcome;
 
 /**
@@ -38,6 +40,7 @@ final class ConformanceTest extends TestCase
         TransportException::class => 'TransportError',
         ApiException::class => 'ApiError',
         OutboxException::class => 'OutboxError',
+        SchemaValidationException::class => 'SchemaValidationError',
     ];
 
     /**
@@ -203,8 +206,78 @@ final class ConformanceTest extends TestCase
             'list' => self::wire($this->pagePayload($client, $input['params'] ?? [])),
             'emit_outbox' => $this->emitOutboxPayload($client, $input['events'], $outcomes),
             'iterate' => self::wire(iterator_to_array($client->events->iterate($input['params'] ?? []), false)),
-            default => throw new \RuntimeException('unknown operation ' . $case['operation']),
+            default => $this->schemaPayload($client, $case),
         };
+    }
+
+    /**
+     * Runs one of the schema operations and returns it in the vector's wire shape.
+     */
+    private function schemaPayload(Client $client, array $case): mixed
+    {
+        $input = $case['input'];
+        $schemas = $client->schemas;
+        $action = $input['action'] ?? '';
+        $params = $input['params'] ?? [];
+        // The vector's schema as nested objects, so an empty object inside it stays one.
+        $schema = isset($input['schema'])
+            ? json_decode(json_encode($input['schema'], JSON_THROW_ON_ERROR), false, 512, JSON_THROW_ON_ERROR)
+            : null;
+
+        switch ($case['operation']) {
+            case 'list_definitions':
+                $page = $schemas->listDefinitions($params);
+
+                return self::wire(['results' => $page->results, 'next_cursor' => $page->nextCursor]);
+            case 'iterate_definitions':
+                return self::wire(iterator_to_array($schemas->iterateDefinitions($params), false));
+            case 'get_definition':
+                return self::wire($schemas->getDefinition($action));
+            case 'create_definition':
+                return self::wire($schemas->createDefinition($input['definition']));
+            case 'update_definition':
+                return self::wire($schemas->updateDefinition($action, $input['changes']));
+            case 'delete_definition':
+                $schemas->deleteDefinition($action);
+
+                return null;
+            case 'list_versions':
+                $page = $schemas->listVersions($action, $params);
+
+                return self::wire(['results' => $page->results, 'next_cursor' => $page->nextCursor]);
+            case 'iterate_versions':
+                return self::wire(iterator_to_array($schemas->iterateVersions($action, $params), false));
+            case 'get_version':
+                return self::versionPayload($schemas->getVersion($action, $input['version']));
+            case 'create_version':
+                return self::versionPayload($schemas->createVersion($action, $schema));
+            case 'update_version':
+                return self::versionPayload($schemas->updateVersion($action, $input['version'], $schema, $input['if_match'] ?? null));
+            case 'delete_version':
+                $schemas->deleteVersion($action, $input['version']);
+
+                return null;
+            case 'publish_version':
+                return self::versionPayload($schemas->publishVersion($action, $input['version']));
+            case 'deprecate_version':
+                return self::versionPayload($schemas->deprecateVersion($action, $input['version']));
+            case 'check_schema':
+                return self::wire($schemas->checkSchema($action, $schema));
+            case 'list_standard_packs':
+                return self::wire($schemas->listStandardPacks());
+            case 'install_standard_packs':
+                return self::wire($schemas->installStandardPacks($input['packs']));
+            default:
+                throw new \RuntimeException('unknown operation ' . $case['operation']);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function versionPayload(SchemaVersionResult $result): array
+    {
+        return ['schema_version' => self::wire($result->schemaVersion), 'etag' => $result->etag];
     }
 
     /**

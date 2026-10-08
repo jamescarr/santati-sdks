@@ -6,6 +6,7 @@ namespace Santati;
 
 use GuzzleHttp\Client as HttpClient;
 use Santati\Core\Api\AuditEventsApi;
+use Santati\Core\Api\EventDefinitionsApi;
 use Santati\Core\Configuration;
 use Santati\Exception\OutboxException;
 use Santati\Exception\ValidationException;
@@ -34,6 +35,17 @@ final class Client
      * The generated core API client, wired to this client's configuration.
      */
     public readonly AuditEventsApi $api;
+
+    /**
+     * The generated core API client for event definitions, schema versions and
+     * standard packs, wired to this client's configuration.
+     */
+    public readonly EventDefinitionsApi $definitionsApi;
+
+    /**
+     * `$client->schemas`: event definitions, their schema versions and the standard packs.
+     */
+    public readonly Schemas $schemas;
 
     /**
      * @internal the outbox behind a queued `events->emit()`; null without an `outbox`
@@ -107,7 +119,9 @@ final class Client
         ]);
 
         $this->api = new AuditEventsApi($http, $config);
+        $this->definitionsApi = new EventDefinitionsApi($http, $config);
         $this->events = new Events($this);
+        $this->schemas = new Schemas($this);
         $this->outbox = $outbox === null ? null : new Outbox($this->events, $outbox, $batchSize, $preSend, $postSend, $finishRequestBeforeFlush);
     }
 

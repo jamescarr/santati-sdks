@@ -45,6 +45,17 @@ console.log(page.results, page.nextCursor);
 for await (const read of santati.events.iterate({ trail: "billing" })) {
   console.log(read.id, read.event);
 }
+
+// Pin an emit to one published schema version of its action.
+await santati.events.emit({ event: "invoice.voided", organizationId: "org_acme", schemaVersion: 2 });
+
+// Manage event definitions and their JSON Schema versions.
+await santati.schemas.createDefinition({ action: "invoice.voided", allowedTargetTypes: ["invoice"] });
+const draft = await santati.schemas.createVersion("invoice.voided", { type: "object" });
+await santati.schemas.updateVersion("invoice.voided", draft.schemaVersion.version, { type: "object" }, {
+  ifMatch: draft.etag ?? undefined,
+});
+await santati.schemas.publishVersion("invoice.voided", draft.schemaVersion.version);
 ```
 
 ## Outbox
@@ -120,10 +131,14 @@ whose result makes the send throw a non-SDK error, is a `failed` outcome with
 A `401`/`403`/`404`/`429`/`5xx`/transport failure and any `400`/`413`/`422` are
 raised as `AuthError`, `NotFoundError`, `RateLimitedError`, `ServerError`,
 `TransportError` and `ValidationError` respectively — all of them
-`SantatiError`s carrying `status`, `code`, `field` and `retryAfter`. The client
-retries transport failures, `500/502/503/504` and `429` (unless the code is
-`quota_exceeded`), re-sending the identical request, and never follows a
-redirect.
+`SantatiError`s carrying `status`, `code`, `field` and `retryAfter`. A
+`400`/`413`/`422` whose code is `schema_validation_failed` (the event broke the
+action's schema, named a disallowed target type, or pinned an unusable
+`schemaVersion`) is a `SchemaValidationError`, a subclass of `ValidationError`.
+The client retries transport failures, `500/502/503/504` and `429` (unless the
+code is `quota_exceeded`), re-sending the identical request, and never follows a
+redirect; `schemas.createVersion` is sent once, because a repeat would create a
+second draft.
 
 ## License
 

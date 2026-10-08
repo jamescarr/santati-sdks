@@ -1,6 +1,6 @@
 """Errors raised by the Santati SDK.
 
-Every failure is a :class:`SantatiError`; the eight subclasses are the kinds
+Every failure is a :class:`SantatiError`; the nine subclasses are the kinds
 described in ``docs/sdk-surface.md``. ``status`` is ``None`` for local
 validation failures, transport errors and outbox errors.
 """
@@ -37,6 +37,10 @@ class ValidationError(SantatiError):
     """The request was rejected locally or by the server (400, 413, 422)."""
 
 
+class SchemaValidationError(ValidationError):
+    """The server rejected the event against the action's JSON Schema, a disallowed target type, or an unusable ``schema_version`` pin (``schema_validation_failed``)."""
+
+
 class AuthError(SantatiError):
     """The API key is missing, invalid or not scoped to the request (401, 403)."""
 
@@ -66,3 +70,8 @@ class OutboxError(SantatiError):
 
     ``code`` is ``outbox_full``, ``store_unavailable``, ``closed`` or ``hook_failed``.
     """
+
+
+def validation_kind(code: str | None) -> type[ValidationError]:
+    """The kind of a 400, 413 or 422 whose body carried ``code``."""
+    return SchemaValidationError if code == "schema_validation_failed" else ValidationError

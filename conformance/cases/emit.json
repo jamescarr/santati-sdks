@@ -601,6 +601,117 @@
           }
         ]
       }
+    },
+    {
+      "id": "emit.schema_version_pin",
+      "feature": "emit.schema_version",
+      "operation": "emit",
+      "input": {
+        "client": {
+          "api_key": "sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance",
+          "trail": "billing",
+          "max_retries": 0
+        },
+        "gateway": {
+          "status": 201,
+          "body": {
+            "json": {
+              "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+              "trail": "billing",
+              "event": "invoice.voided",
+              "created_at": "2026-09-29T14:03:11.482000Z",
+              "received_at": "2026-09-29T14:03:11.913000Z",
+              "organization_id": "org_acme",
+              "actor": {
+                "type": "user",
+                "id": "usr_123",
+                "name": "Dana Ortiz",
+                "metadata": {}
+              },
+              "targets": [
+                {
+                  "type": "invoice",
+                  "id": "inv_555",
+                  "name": "INV-555",
+                  "metadata": {}
+                }
+              ],
+              "metadata": {
+                "plan": "pro"
+              },
+              "data": {
+                "amount_cents": 4200,
+                "currency": "usd"
+              },
+              "context": {},
+              "hash": "",
+              "schema_version": 2
+            }
+          }
+        },
+        "event": {
+          "event": "invoice.voided",
+          "schema_version": 2
+        }
+      },
+      "expect": {
+        "ok": {
+          "event": {
+            "id": "01J9Z6K3M4QX8RT2VN5B7HCWDA",
+            "trail": "billing",
+            "event": "invoice.voided",
+            "created_at": "2026-09-29T14:03:11.482000Z",
+            "received_at": "2026-09-29T14:03:11.913000Z",
+            "organization_id": "org_acme",
+            "actor": {
+              "type": "user",
+              "id": "usr_123",
+              "name": "Dana Ortiz",
+              "metadata": {}
+            },
+            "targets": [
+              {
+                "type": "invoice",
+                "id": "inv_555",
+                "name": "INV-555",
+                "metadata": {}
+              }
+            ],
+            "metadata": {
+              "plan": "pro"
+            },
+            "data": {
+              "amount_cents": 4200,
+              "currency": "usd"
+            },
+            "context": {},
+            "hash": "",
+            "schema_version": 2
+          },
+          "duplicate": false,
+          "idempotency_key": {
+            "$generated": "k"
+          },
+          "queued": false
+        },
+        "requests": [
+          {
+            "method": "POST",
+            "path": "/api/v0/events/",
+            "headers": {
+              "authorization": "Api-Key sat_sk_01J9Z6K3M4QX8RT2VN5B7HCWDA.conformance"
+            },
+            "body": {
+              "event": "invoice.voided",
+              "trail": "billing",
+              "idempotency_key": {
+                "$generated": "k"
+              },
+              "schema_version": 2
+            }
+          }
+        ]
+      }
     }
   ]
 }

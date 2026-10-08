@@ -135,6 +135,107 @@ def flatten_batch_item_result(spec: dict) -> None:
     schemas["EventBatchItemResult"] = json.loads(json.dumps(BATCH_ITEM_RESULT))
 
 
+def add_schema_version_pin(spec: dict) -> None:
+    """Ingest accepts an integer `schema_version` pin on an envelope, but the
+    control plane's documented `EventEnvelopeRequest` does not list it yet, so no
+    core would model it and the facades could not send it. No `minimum`: the
+    server is the only validator (a bad pin answers `schema_validation_failed`).
+    A spec that already documents the property is left as it is."""
+    envelope = spec["components"]["schemas"].get("EventEnvelopeRequest")
+    if envelope is None:
+        die("components.schemas.EventEnvelopeRequest is missing; update .mise/lib/generate.py")
+    properties = envelope.setdefault("properties", {})
+    if "schema_version" in properties:
+        return
+    properties["schema_version"] = {
+        "type": "integer",
+        "description": (
+            "Pin to one published schema version of the action; absent means the newest "
+            "published, not deprecated version. Ingest accepts it; the control plane's "
+            "documented envelope does not list it yet."
+        ),
+    }
+
+
+SCHEMA_DOCUMENTS = ("EventSchemaDocumentRequest", "EventSchemaVersion", "StandardEvent")
+
+
+def type_schema_documents(spec: dict) -> None:
+    """The `schema` member (a whole JSON Schema document) is declared with no
+    `type`, so every generator types it as an arbitrary value (Rust
+    `Option<serde_json::Value>`, Go `interface{}`) and the facades could not hand
+    callers a map. An object with open `additionalProperties` mirrors
+    `AuditEvent.data` and generates a typed map in every language."""
+    schemas = spec["components"]["schemas"]
+    for name in SCHEMA_DOCUMENTS:
+        component = schemas.get(name)
+        if component is None:
+            die(f"components.schemas.{name} is missing; update .mise/lib/generate.py")
+        node = component.get("properties", {}).get("schema")
+        if node is None:
+            die(f"components.schemas.{name}.properties.schema is missing; update .mise/lib/generate.py")
+        if "type" in node:
+            continue
+        typed = {"type": "object", "additionalProperties": {}}
+        for key in ("description", "readOnly"):
+            if key in node:
+                typed[key] = node[key]
+        component["properties"]["schema"] = typed
+
+
+def enum_ref(node, enums: set[str]) -> bool:
+    """Whether `node` is exactly a reference to one of the string enums (bare, or
+    wrapped in the single-member `allOf` DRF emits to attach a description)."""
+    if not isinstance(node, dict):
+        return False
+    prefix = "#/components/schemas/"
+    ref = node.get("$ref")
+    if isinstance(ref, str):
+        return ref.startswith(prefix) and ref[len(prefix):] in enums
+    members = node.get("allOf")
+    return (
+        isinstance(members, list)
+        and len(members) == 1
+        and isinstance(members[0], dict)
+        and isinstance(members[0].get("$ref"), str)
+        and members[0]["$ref"].startswith(prefix)
+        and members[0]["$ref"][len(prefix):] in enums
+    )
+
+
+def flatten_string_enums(spec: dict) -> None:
+    """Component string enums (`SchemaVersionStatusEnum`, `StandardPackSlugEnum`)
+    become plain strings. A core that enforces the pack-slug enum would reject a
+    slug the server accepts (the server judges the slug), and the Rust and Python
+    enum decoders would fail on a status a later control plane adds. Inline enums
+    (the `sort` parameter, `BATCH_ITEM_RESULT.status`) are untouched. The
+    emptied components are dropped by `prune_schemas`."""
+    enums = {
+        name
+        for name, schema in spec["components"]["schemas"].items()
+        if isinstance(schema, dict) and schema.get("type") == "string" and "enum" in schema
+    }
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in list(node.items()):
+                if enum_ref(value, enums):
+                    node[key] = {
+                        "type": "string",
+                        **{k: value[k] for k in ("description", "nullable", "readOnly") if k in value},
+                    }
+                else:
+                    walk(value)
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                if enum_ref(value, enums):
+                    node[index] = {"type": "string"}
+                else:
+                    walk(value)
+
+    walk(spec)
+
+
 def refs_in(node) -> list[str]:
     if isinstance(node, dict):
         if isinstance(node.get("$ref"), str) and node["$ref"].startswith("#/components/"):
@@ -222,6 +323,9 @@ def prepare() -> dict:
     keep_operations(spec, CONFIG["operations"])
     trim_operations(spec)
     flatten_batch_item_result(spec)
+    add_schema_version_pin(spec)
+    type_schema_documents(spec)
+    flatten_string_enums(spec)
     prune_schemas(spec)
     strip_string_formats(spec)
     strip_length_bounds(spec)

@@ -75,6 +75,30 @@ async fn main() -> Result<(), santati::Error> {
         println!("{}", event?.event);
     }
 
+    // Pin an emit to one published schema version of its action.
+    events
+        .emit(EventInput {
+            event: "invoice.voided".into(),
+            schema_version: Some(2),
+            ..Default::default()
+        })
+        .await?;
+
+    // Manage event definitions and their JSON Schema versions.
+    let schemas = client.schemas();
+    schemas
+        .create_definition(santati::DefinitionInput {
+            action: "invoice.voided".into(),
+            ..Default::default()
+        })
+        .await?;
+    let draft = schemas
+        .create_version("invoice.voided", serde_json::Map::new())
+        .await?;
+    schemas
+        .publish_version("invoice.voided", draft.schema_version.version)
+        .await?;
+
     Ok(())
 }
 ```
@@ -134,7 +158,7 @@ builder. For a Redis Streams store, enable the optional `redis` feature
 
 ## Errors
 
-One `Error` enum with eight kinds, each carrying `ErrorDetails`:
+One `Error` enum with nine kinds, each carrying `ErrorDetails`:
 
 ```rust
 use santati::ErrorKind;
@@ -148,9 +172,13 @@ match client.events().list(Default::default()).await {
 }
 ```
 
-`ErrorKind` is `Validation`, `Auth`, `NotFound`, `RateLimited`, `Server`,
-`Transport`, `Api` or `Outbox`; `error.status()`, `error.code()` and `error.field()`
-carry the server's side of the failure when there is one.
+`ErrorKind` is `Validation`, `SchemaValidation`, `Auth`, `NotFound`,
+`RateLimited`, `Server`, `Transport`, `Api` or `Outbox`; `error.status()`,
+`error.code()` and `error.field()` carry the server's side of the failure when
+there is one. `SchemaValidation` is a 400, 413 or 422 whose code is
+`schema_validation_failed` (the event broke the action's schema, named a
+disallowed target type, or pinned an unusable `schema_version`); it is a
+separate kind, so code matching `Validation` must match it too.
 
 ## Notes
 

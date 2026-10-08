@@ -5,10 +5,15 @@ import "fmt"
 // Kind is the class of a failure. Its string value is the kind's name.
 type Kind string
 
-// The eight error kinds.
+// The nine error kinds.
 const (
-	// KindValidation covers local validation and HTTP 400, 413 and 422.
+	// KindValidation covers local validation and HTTP 400, 413 and 422 (except
+	// the code schema_validation_failed, see KindSchemaValidation).
 	KindValidation Kind = "ValidationError"
+	// KindSchemaValidation covers HTTP 400, 413 and 422 whose code is
+	// schema_validation_failed: the event broke the action's JSON Schema, named
+	// a disallowed target type, or pinned an unusable schema version.
+	KindSchemaValidation Kind = "SchemaValidationError"
 	// KindAuth covers HTTP 401 and 403.
 	KindAuth Kind = "AuthError"
 	// KindNotFound covers HTTP 404.

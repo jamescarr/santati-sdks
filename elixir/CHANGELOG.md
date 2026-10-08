@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Santati.Schemas`: event definitions (`list_definitions`, `stream_definitions`, `get_definition`, `create_definition`, `update_definition`, `delete_definition`), their schema versions (`list_versions`, `stream_versions`, `get_version`, `create_version`, `update_version` with `if_match:`, `delete_version`, `publish_version`, `deprecate_version`, `check_schema`) and the standard packs (`list_standard_packs`, `install_standard_packs`). `create_version/3` is sent once, never retried.
+- `schema_version` in the event map of `Santati.Events.emit/2`, `emit_batch/2` and queued events, to pin an emit to one published version of the action's schema.
+- `Santati.SchemaValidationError`, plus the `Santati.DefinitionPage`, `Santati.SchemaVersionPage` and `Santati.SchemaVersionResult` structs.
+
+### Changed
+
+- A 400, 413 or 422 whose code is `schema_validation_failed` (and a rejected outbox item with that code) now answers `%Santati.SchemaValidationError{}` instead of `%Santati.ValidationError{}`. An Elixir exception cannot subclass another, so code that matches `%Santati.ValidationError{}` does not catch it: match both.
+
 ## [0.2.0] - 2026-10-06
 
 ### Added

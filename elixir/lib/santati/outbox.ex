@@ -394,12 +394,13 @@ defmodule Santati.Outbox do
 
     %SendOutcome{
       status: :rejected,
-      error: %Santati.ValidationError{
-        status: status,
-        code: error.code,
-        field: error.field,
-        message: error.message || "event rejected"
-      }
+      error:
+        struct(Errors.validation_kind(error.code), %{
+          status: status,
+          code: error.code,
+          field: error.field,
+          message: error.message || "event rejected"
+        })
     }
   end
 

@@ -1,4 +1,4 @@
-/** One base type and eight kinds; `status` is null when no response was answered. */
+/** One base type and nine kinds; `status` is null when no response was answered. */
 export interface SantatiErrorOptions {
   status?: number | null;
   code?: string | null;
@@ -28,6 +28,18 @@ export class SantatiError extends Error {
 
 /** Something the caller got wrong: a local check, or HTTP 400, 413 or 422. */
 export class ValidationError extends SantatiError {}
+
+/**
+ * A `ValidationError` the server raised against the action's JSON Schema: the
+ * event broke it, named a disallowed target type, or pinned an unusable
+ * `schemaVersion` (HTTP 400, 413 or 422 with code `schema_validation_failed`).
+ */
+export class SchemaValidationError extends ValidationError {}
+
+/** The kind of a 400, 413 or 422 whose body carried `code`. @internal */
+export function validationKind(code: string | null | undefined): typeof ValidationError {
+  return code === "schema_validation_failed" ? SchemaValidationError : ValidationError;
+}
 
 /** HTTP 401 or 403. */
 export class AuthError extends SantatiError {}

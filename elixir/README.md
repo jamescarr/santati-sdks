@@ -93,6 +93,37 @@ client
 `stream/2` yields `SantatiCore.Model.AuditEvent` structs and raises the error of
 the page that failed — events from earlier pages have already been yielded.
 
+Pin an emit to one published schema version of its action with the event's
+`schema_version` (an integer, forwarded unchanged):
+
+```elixir
+Santati.Events.emit(client, %{event: "invoice.voided", schema_version: 2})
+```
+
+## Schemas
+
+`Santati.Schemas` manages event definitions, their JSON Schema versions and the
+standard packs. Every function takes the client first and answers
+`{:ok, value}` or `{:error, exception}`:
+
+```elixir
+{:ok, _definition} = Santati.Schemas.create_definition(client, %{action: "invoice.voided"})
+{:ok, draft} = Santati.Schemas.create_version(client, "invoice.voided", %{"type" => "object"})
+
+{:ok, _updated} =
+  Santati.Schemas.update_version(
+    client,
+    "invoice.voided",
+    draft.schema_version.version,
+    %{"type" => "object"},
+    if_match: draft.etag
+  )
+
+{:ok, _published} = Santati.Schemas.publish_version(client, "invoice.voided", draft.schema_version.version)
+```
+
+`create_version/3` is sent once, because a repeat would create a second draft.
+
 ## Outbox
 
 Without an outbox, `Santati.Events.emit/2` sends the event. Pass `outbox:` — a
@@ -127,13 +158,18 @@ attributes:
 
 | kind | when |
 |---|---|
-| `Santati.ValidationError` | local validation (`status` is `nil`), or HTTP 400, 413, 422 |
+| `Santati.ValidationError` | local validation (`status` is `nil`), or HTTP 400, 413, 422 (any code but `schema_validation_failed`) |
+| `Santati.SchemaValidationError` | HTTP 400, 413, 422 whose code is `schema_validation_failed`: the event broke the action's schema, named a disallowed target type, or pinned an unusable `schema_version` |
 | `Santati.AuthError` | HTTP 401, 403 |
 | `Santati.NotFoundError` | HTTP 404 |
 | `Santati.RateLimitedError` | HTTP 429 |
 | `Santati.ServerError` | HTTP 5xx |
 | `Santati.TransportError` | no response at all: refused, DNS, TLS, timeout (`status` is `nil`) |
 | `Santati.ApiError` | any other status, an unexpected 2xx, or an undecodable 2xx body |
+
+An Elixir exception cannot subclass another, so `%Santati.ValidationError{}` does
+not match a `Santati.SchemaValidationError`: match both when you handle
+validation failures.
 
 ```elixir
 case Santati.Events.emit(client, %{event: "invoice.voided"}) do

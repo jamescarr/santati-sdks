@@ -208,7 +208,7 @@ module Santati
       error = item.error
       SendOutcome.new(
         status: "rejected",
-        error: ValidationError.new(
+        error: Santati.validation_class_for(error&.code).new(
           error&.message || "rejected", status: http_status, code: error&.code, field: error&.field
         )
       )

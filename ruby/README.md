@@ -55,12 +55,26 @@ client.events.iterate(trail: "billing").each { |event| puts event.id }
 ```
 
 `emit` accepts `event:`, `trail:`, `organization_id:`, `actor:`, `targets:`,
-`metadata:`, `data:`, `context:`, `created_at:` and `idempotency_key:`.
+`metadata:`, `data:`, `context:`, `created_at:`, `idempotency_key:` and
+`schema_version:` (an Integer pinning the event to one published schema
+version of its action, forwarded unchanged).
 `list` and `iterate` accept the read filters (`trail:`, `event:`,
 `event_prefix:`, `organization_id:`, `actor_id:`, `actor_type:`,
 `target_type:`, `target_id:`, `created_after:`, `created_before:`, `q:`,
 `sort:`, `limit:`; `list` also takes `cursor:`). The client's default `trail`
 is never applied to reads.
+
+Event definitions, their JSON Schema versions and the standard packs live on
+`client.schemas`:
+
+```ruby
+client.schemas.create_definition(action: "invoice.voided", allowed_target_types: ["invoice"])
+draft = client.schemas.create_version("invoice.voided", {"type" => "object"})
+client.schemas.update_version("invoice.voided", draft.schema_version.version, {"type" => "object"}, if_match: draft.etag)
+client.schemas.publish_version("invoice.voided", draft.schema_version.version)
+```
+
+`create_version` is sent once, because a repeat would create a second draft.
 
 The read models are the generated `SantatiCore::AuditEvent`,
 `Santati::EventActor` and `Santati::EventTarget`. The event's sha256 chain hash
@@ -138,6 +152,7 @@ Every failure raises a `Santati::Error` subclass with `status`, `code`,
 |---|---|
 |local validation|`Santati::ValidationError`|
 |HTTP 400, 413, 422|`Santati::ValidationError`|
+|HTTP 400, 413, 422 with code `schema_validation_failed`|`Santati::SchemaValidationError` (a `ValidationError`)|
 |HTTP 401, 403|`Santati::AuthError`|
 |HTTP 404|`Santati::NotFoundError`|
 |HTTP 429|`Santati::RateLimitedError`|

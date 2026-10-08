@@ -77,6 +77,58 @@ defmodule Santati.EventPage do
         }
 end
 
+defmodule Santati.DefinitionPage do
+  @moduledoc """
+  One page of event definitions.
+
+    * `results` — the page's `SantatiCore.Model.EventDefinition` structs
+    * `next_cursor` — the cursor of the next page, or `nil` on the last page
+  """
+
+  @derive JSON.Encoder
+  defstruct [:results, :next_cursor]
+
+  @type t :: %__MODULE__{
+          results: [SantatiCore.Model.EventDefinition.t()],
+          next_cursor: String.t() | nil
+        }
+end
+
+defmodule Santati.SchemaVersionPage do
+  @moduledoc """
+  One page of an action's schema versions, newest first.
+
+    * `results` — the page's `SantatiCore.Model.EventSchemaVersion` structs
+    * `next_cursor` — the cursor of the next page, or `nil` on the last page
+  """
+
+  @derive JSON.Encoder
+  defstruct [:results, :next_cursor]
+
+  @type t :: %__MODULE__{
+          results: [SantatiCore.Model.EventSchemaVersion.t()],
+          next_cursor: String.t() | nil
+        }
+end
+
+defmodule Santati.SchemaVersionResult do
+  @moduledoc """
+  A schema version and the `ETag` header its response carried.
+
+    * `schema_version` — the `SantatiCore.Model.EventSchemaVersion`
+    * `etag` — the response's `ETag`, verbatim, or `nil`; pass it back as
+      `if_match` to `Santati.Schemas.update_version/5`
+  """
+
+  @derive JSON.Encoder
+  defstruct [:schema_version, :etag]
+
+  @type t :: %__MODULE__{
+          schema_version: SantatiCore.Model.EventSchemaVersion.t(),
+          etag: String.t() | nil
+        }
+end
+
 defmodule Santati.OutboxEntry do
   @moduledoc "One claimed outbox entry: the store's `id` and the stored `event` map."
 

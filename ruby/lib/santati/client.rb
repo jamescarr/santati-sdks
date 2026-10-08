@@ -3,11 +3,12 @@
 require "uri"
 
 module Santati
-  # The entry point: holds the connection settings and exposes the events
-  # resource.
+  # The entry point: holds the connection settings and exposes the events and
+  # schemas resources.
   #
   #   client = Santati::Client.new(api_key: "sat_sk_…", trail: "billing")
   #   client.events.emit(event: "invoice.voided")
+  #   client.schemas.get_definition("invoice.voided")
   class Client
     DEFAULT_BASE_URL = "https://api.santati.io"
     DEFAULT_TIMEOUT_MS = 10_000
@@ -17,7 +18,7 @@ module Santati
     DEFAULT_BATCH_SIZE = 100
     DEFAULT_FLUSH_INTERVAL_MS = 1000
 
-    attr_reader :trail, :timeout_ms, :max_retries, :initial_backoff_ms, :max_backoff_ms, :events
+    attr_reader :trail, :timeout_ms, :max_retries, :initial_backoff_ms, :max_backoff_ms, :events, :schemas
 
     def initialize(api_key:, base_url: DEFAULT_BASE_URL, trail: nil, timeout_ms: DEFAULT_TIMEOUT_MS,
       max_retries: DEFAULT_MAX_RETRIES, initial_backoff_ms: DEFAULT_INITIAL_BACKOFF_MS,
@@ -40,8 +41,11 @@ module Santati
       @max_retries = max_retries
       @initial_backoff_ms = initial_backoff_ms
       @max_backoff_ms = max_backoff_ms
-      @api = SantatiCore::AuditEventsApi.new(build_api_client(api_key, base_url, headers))
+      api_client = build_api_client(api_key, base_url, headers)
+      @api = SantatiCore::AuditEventsApi.new(api_client)
+      @definitions_api = SantatiCore::EventDefinitionsApi.new(api_client)
       @events = Events.new(self)
+      @schemas = Schemas.new(self)
       @outbox = outbox && Outbox.new(
         self, store: outbox, batch_size: batch_size,
         flush_interval_ms: flush_interval_ms, pre_send: pre_send, post_send: post_send
@@ -64,6 +68,9 @@ module Santati
 
     # @api private
     attr_reader :api
+
+    # @api private
+    attr_reader :definitions_api
 
     # @api private
     attr_reader :outbox

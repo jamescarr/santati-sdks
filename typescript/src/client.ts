@@ -1,13 +1,10 @@
 import {
   AuditEventFromJSON,
   AuditEventsApi,
-  Configuration,
   EventBatchResultFromJSON,
   EventEnvelopeRequestFromJSON,
   EventEnvelopeRequestToJSON,
-  FetchError,
   PaginatedAuditEventListFromJSON,
-  ResponseError,
 } from "./core/index.js";
 import type {
   AuditEvent,
@@ -17,19 +14,11 @@ import type {
   EventTargetRequest,
   EventsListRequest,
 } from "./core/index.js";
-import {
-  ApiError,
-  AuthError,
-  NotFoundError,
-  RateLimitedError,
-  SantatiError,
-  ServerError,
-  TransportError,
-  ValidationError,
-} from "./errors.js";
-import type { SantatiErrorOptions } from "./errors.js";
+import { ValidationError } from "./errors.js";
+import { coreConfiguration, decodeJson, nextCursor, requestInit, send, unexpected } from "./http.js";
 import { OutboxWorker } from "./outbox.js";
 import { withRetries, type RetryOptions } from "./retry.js";
+import { Schemas } from "./schemas.js";
 import type {
   ActorInput,
   BatchResult,
@@ -80,7 +69,7 @@ export interface SantatiOptions {
   postSend?: PostSendHook;
 }
 
-interface ClientConfig extends RetryOptions {
+export interface ClientConfig extends RetryOptions {
   apiKey: string;
   baseUrl: string;
   trail?: string;
@@ -91,13 +80,6 @@ interface ClientConfig extends RetryOptions {
   flushIntervalMs: number;
   preSend?: PreSendHook;
   postSend?: PostSendHook;
-}
-
-/** A successful response, or the failed one an `ApiResponse` was never built from. */
-interface RawResponse {
-  status: number;
-  headers: Headers;
-  text: string;
 }
 
 function resolve(options: SantatiOptions): ClientConfig {
@@ -185,6 +167,7 @@ function buildEnvelope(
   if (input.context != null) envelope.context = input.context;
   if (input.createdAt != null) envelope.createdAt = input.createdAt;
   envelope.idempotencyKey = idempotencyKey;
+  if (input.schemaVersion != null) envelope.schemaVersion = input.schemaVersion;
   return envelope;
 }
 
@@ -211,6 +194,7 @@ export function envelopeFromWire(json: unknown): EventInput {
   if (envelope.context != null) input.context = envelope.context;
   if (envelope.createdAt != null) input.createdAt = envelope.createdAt as unknown as string;
   if (envelope.idempotencyKey != null) input.idempotencyKey = envelope.idempotencyKey;
+  if (envelope.schemaVersion != null) input.schemaVersion = envelope.schemaVersion;
   return input;
 }
 
@@ -234,80 +218,6 @@ function listRequest(params: ListParams): EventsListRequest {
   return request;
 }
 
-type ErrorKind = new (message: string, options?: SantatiErrorOptions) => SantatiError;
-
-function errorKind(status: number): ErrorKind {
-  if (status === 400 || status === 413 || status === 422) return ValidationError;
-  if (status === 401 || status === 403) return AuthError;
-  if (status === 404) return NotFoundError;
-  if (status === 429) return RateLimitedError;
-  if (status >= 500 && status <= 599) return ServerError;
-  return ApiError;
-}
-
-interface ParsedBody {
-  code: string | null;
-  field: string | null;
-  message: string | null;
-}
-
-const NO_BODY: ParsedBody = { code: null, field: null, message: null };
-
-/** The `error` envelope, a `detail`, or nothing at all. */
-function errorBody(text: string): ParsedBody {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return NO_BODY;
-  }
-  if (parsed === null || typeof parsed !== "object") return NO_BODY;
-  if ("error" in parsed) {
-    const envelope = parsed.error;
-    if (envelope !== null && typeof envelope === "object" && "code" in envelope && typeof envelope.code === "string") {
-      const field = "field" in envelope ? envelope.field : null;
-      const message = "message" in envelope ? envelope.message : null;
-      return {
-        code: envelope.code,
-        field: typeof field === "string" ? field : null,
-        message: typeof message === "string" ? message : null,
-      };
-    }
-  }
-  if ("detail" in parsed && typeof parsed.detail === "string") {
-    return { code: null, field: null, message: parsed.detail };
-  }
-  return NO_BODY;
-}
-
-/** The mapped failure for a non-2xx answer. */
-function failureFrom(raw: RawResponse): SantatiError {
-  const body = errorBody(raw.text);
-  const retryAfter = raw.headers.get("retry-after");
-  const Kind = errorKind(raw.status);
-  return new Kind(body.message ?? `HTTP ${raw.status}`, {
-    status: raw.status,
-    code: body.code,
-    field: body.field,
-    retryAfter: retryAfter !== null && /^\d+$/.test(retryAfter) ? Number(retryAfter) : null,
-  });
-}
-
-/** A 2xx status the operation has no meaning for. */
-function unexpected(raw: RawResponse): SantatiError {
-  return new ApiError(`unexpected status ${raw.status} for this operation`, {
-    status: raw.status,
-  });
-}
-
-function decodeJson<T>(raw: RawResponse, fromJSON: (json: unknown) => T): T {
-  try {
-    return fromJSON(JSON.parse(raw.text));
-  } catch {
-    throw new ApiError("could not decode the response body", { status: raw.status });
-  }
-}
-
 /**
  * The `events` resource. One generated configuration/client pair backs it, so
  * two clients never share a base URL, key or headers.
@@ -320,18 +230,7 @@ export class Events {
 
   constructor(config: ClientConfig) {
     this.config = config;
-    // The generated core applies the spec's `ApiKeyAuth` scheme from `apiKey`;
-    // `User-Agent` cannot be set per call, so it rides on the configuration.
-    this.api = new AuditEventsApi(
-      new Configuration({
-        basePath: config.baseUrl,
-        apiKey: () => `Api-Key ${config.apiKey}`,
-        headers: {
-          "User-Agent": `santati-typescript/${VERSION}`,
-          ...config.headers,
-        },
-      }),
-    );
+    this.api = new AuditEventsApi(coreConfiguration(config));
     this.outbox =
       config.outbox === undefined
         ? undefined
@@ -362,7 +261,10 @@ export class Events {
       return { event: null, duplicate: false, idempotencyKey, queued: true };
     }
     const raw = await withRetries(
-      () => this.send(() => this.api.eventsCreateRaw({ eventIngestRequest }, this.init())),
+      () =>
+        send(() =>
+          this.api.eventsCreateRaw({ eventIngestRequest }, requestInit(this.config.timeoutMs)),
+        ),
       this.config,
     );
     if (raw.status !== 200 && raw.status !== 201) throw unexpected(raw);
@@ -392,8 +294,11 @@ export class Events {
     );
     const raw = await withRetries(
       () =>
-        this.send(() =>
-          this.api.eventsCreateRaw({ eventIngestRequest: { events: envelopes } }, this.init()),
+        send(() =>
+          this.api.eventsCreateRaw(
+            { eventIngestRequest: { events: envelopes } },
+            requestInit(this.config.timeoutMs),
+          ),
         ),
       retries ? this.config : { ...this.config, maxRetries: 0 },
     );
@@ -417,12 +322,12 @@ export class Events {
   /** One page of events. The client's default trail does not apply here. */
   async list(params: ListParams = {}): Promise<EventPage> {
     const raw = await withRetries(
-      () => this.send(() => this.api.eventsListRaw(listRequest(params), this.init())),
+      () => send(() => this.api.eventsListRaw(listRequest(params), requestInit(this.config.timeoutMs))),
       this.config,
     );
     if (raw.status !== 200) throw unexpected(raw);
     const page = decodeJson(raw, PaginatedAuditEventListFromJSON);
-    return { results: page.results, nextCursor: this.nextCursor(raw, page.next) };
+    return { results: page.results, nextCursor: nextCursor(raw, page.next) };
   }
 
   /** Every matching event, page by page; a later failure surfaces after earlier yields. */
@@ -435,50 +340,19 @@ export class Events {
       cursor = page.nextCursor;
     }
   }
-
-  /** The `cursor` query parameter of the response's `next` URL, or null. */
-  private nextCursor(raw: RawResponse, next: string | null | undefined): string | null {
-    if (next == null) return null;
-    try {
-      return new URL(next).searchParams.get("cursor");
-    } catch {
-      throw new ApiError("could not decode the response body", { status: raw.status });
-    }
-  }
-
-  private init(): RequestInit {
-    return { signal: AbortSignal.timeout(this.config.timeoutMs), redirect: "manual" };
-  }
-
-  /** One attempt: the generated call, with its failure modes mapped to kinds. */
-  private async send(attempt: () => Promise<{ raw: Response }>): Promise<RawResponse> {
-    const response = await attempt()
-      .then(({ raw }) => raw)
-      .catch((error: unknown) => {
-        // A non-2xx answer is an error object carrying the response, not a
-        // throw of its own; anything fetch could not answer at all is transport.
-        if (error instanceof ResponseError) return error.response;
-        if (error instanceof FetchError) throw new TransportError(error.cause?.message ?? error.message);
-        throw error;
-      });
-    const raw = {
-      status: response.status,
-      headers: response.headers,
-      text: await response.text(),
-    };
-    // Classified here, inside the attempt, so the retry loop sees kinds.
-    if (raw.status < 200 || raw.status >= 300) throw failureFrom(raw);
-    return raw;
-  }
 }
 
 /** An audit-log client for one team API key. */
 export class Santati {
   /** Emit, batch, list and iterate on `/api/v0/events/`. */
   readonly events: Events;
+  /** Event definitions, schema versions and standard packs on `/api/v0/event-definitions/` and `/api/v0/standard-events/`. */
+  readonly schemas: Schemas;
 
   constructor(options: SantatiOptions) {
-    this.events = new Events(resolve(options));
+    const config = resolve(options);
+    this.events = new Events(config);
+    this.schemas = new Schemas(config);
   }
 
   /** Runs one outbox pass now. Rejects with `OutboxError` if the store fails. No-op without an outbox. */
