@@ -6,7 +6,8 @@ openapi-generator core plus a hand-written facade, kept identical on the wire
 by a shared conformance suite — and an eighth package, `terraform`, the
 Terraform provider, which is not an event SDK (see below).
 
-`CLAUDE.md` is a symlink to this file.
+`CLAUDE.md` imports this file (`@AGENTS.md`). It is a regular file, not a symlink: Lovable's GitHub skill
+import (`skills/`) rejects a repository archive that contains a symlink, so keep the repository free of them.
 
 ## Repo map
 
