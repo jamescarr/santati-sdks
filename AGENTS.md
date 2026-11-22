@@ -6,7 +6,8 @@ openapi-generator core plus a hand-written facade, kept identical on the wire
 by a shared conformance suite — and an eighth package, `terraform`, the
 Terraform provider, which is not an event SDK (see below).
 
-`CLAUDE.md` is a symlink to this file.
+`CLAUDE.md` imports this file (`@AGENTS.md`). It is a regular file, not a symlink: Lovable's GitHub skill
+import (`skills/`) rejects a repository archive that contains a symlink, so keep the repository free of them.
 
 ## Repo map
 
@@ -21,6 +22,7 @@ Terraform provider, which is not an event SDK (see below).
 | `chaos/` | manual outbox load and fault-injection harness: `gateway.mjs` (fault-injecting ingest stand-in), `scenarios.json` (scenarios and budgets), `sdks.json` (how to run each driver), `run.mjs`; the drivers live in each package's test tree (`python/tests/chaos_driver.py`, `typescript/src/chaos/driver.ts`, `go/chaos_test.go`, `rust/tests/chaos.rs`, `elixir/test/chaos_driver.exs`, `ruby/test/chaos_driver.rb`, `php/tests/chaos_driver.php`) |
 | `<pkg>/` (seven) | the facade, its manifest, `CHANGELOG.md`, `README.md`, `LICENSE`, and the generated core |
 | `terraform/` | the Terraform provider (`registry.terraform.io/jamescarr/santati`): Go module with a hand-written HTTP client in `internal/api`, framework resources and data sources in `internal/provider`, hermetic tests against an in-process fake control plane, generated registry `docs/` (`mise run format terraform`), `.goreleaser.yml`. Exempt from `conformance/` (`exempt` in `conformance/sdks.json`); tagged `terraform-vX.Y.Z`, published through a read-only mirror (`docs/releasing.md`) |
+| `skills/` | agent skills in the Agent Skills `SKILL.md` shape (importable into Lovable, Claude and any tool that reads them): `santati-audit-logging` |
 | `.mise/tasks/` | every workflow command (`mise tasks ls`) |
 | `.claude/skills/` | `sdk-release`, `sdk-spec-sync`, `sdk-add-operation`, `sdk-conformance` |
 | `docs/releasing.md` | secrets, one-time registry setup, the release flow |
