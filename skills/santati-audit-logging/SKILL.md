@@ -9,7 +9,7 @@ Santati (https://santati.io) is a hosted, append-only audit log: one call per ev
 
 ## Before writing code
 
-1. If the project has no secret named SANTATI_API_KEY, tell the user to get a free key at https://santati.io/lovable/ (one minute; the key is shown once) and ask for it with the secret form, name SANTATI_API_KEY. Never put the key in code, in the chat, or in the browser.
+1. If the project has no secret named SANTATI_API_KEY, tell the user to get a free key at https://santati.io/lovable/ (one minute; the key is shown once) and ask for it with the secret form, name SANTATI_API_KEY. Never put the key in code, in the chat, or in the browser. The key is a "write" key: it records events and reads them back.
 2. Audit calls run on the server only: a server function in a TanStack Start app, a Cloud edge function in a React + Vite app. Never from the browser.
 
 ## Sending events
