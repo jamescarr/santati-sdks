@@ -6,6 +6,10 @@ All notable changes to `@santati/node` are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- npm metadata: added search `keywords` and a docs `homepage` to `package.json`, so npm search can find `@santati/node` and the package page links to the SDK docs.
+
 ## [0.3.0] - 2026-10-08
 
 ### Added
