@@ -2,6 +2,23 @@
   "name": "@santati/node",
   "version": "0.3.0",
   "description": "Official TypeScript SDK for the Santati audit-log API",
+  "keywords": [
+    "audit-log",
+    "audit-logging",
+    "audit-trail",
+    "audit",
+    "activity-log",
+    "compliance",
+    "soc2",
+    "tamper-evident",
+    "append-only",
+    "logging",
+    "santati",
+    "lovable",
+    "typescript",
+    "sdk"
+  ],
+  "homepage": "https://docs.santati.io/sdks/node/",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
