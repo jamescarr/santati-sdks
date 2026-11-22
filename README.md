@@ -28,6 +28,8 @@ that keep the seven packages identical on the wire.
 SDK: it implements none of `docs/sdk-surface.md`'s operations and is exempt
 from the conformance suite.
 
+`skills/santati-audit-logging`: a Lovable/Claude skill that teaches an agent to add Santati audit logging.
+
 Quickstart, Python:
 
 ```python
